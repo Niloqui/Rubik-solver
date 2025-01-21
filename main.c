@@ -1,7 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <sys/timeb.h>
+#include <time.h>
+
+struct timespec compute_timespec_difference(struct timespec end, struct timespec start){
+    struct timespec diff;
+    
+    diff.tv_sec = end.tv_sec - start.tv_sec;
+    diff.tv_nsec = end.tv_nsec - start.tv_nsec;
+    if(diff.tv_nsec < 0){
+        diff.tv_nsec += 1000000000; // 999999999 + 1
+        diff.tv_sec -= 1;
+    }
+    
+    return diff;
+}
+
 
 typedef enum {
     R = 0,
@@ -90,7 +104,6 @@ typedef struct {
     int num_stickers_face;
     int faces_len;
     face_t *faces;
-    
 } cube_t;
 
 cube_t create_cube(int num_layers){
@@ -181,76 +194,7 @@ char* cube_to_one_line_string(const cube_t cube){
     return str;
 }
 
-/*
-void rotate_single_face(cube_t cube, face_t face, unsigned char rotation){
-    // Questo funziona sole per il 3x3
-    rotation = rotation % 4;
-    
-    switch (rotation){
-    case 1:
-        cube.faces[exchange*cube.num_stickers_face + 0] = cube.faces[face*cube.num_stickers_face + 0];
-        cube.faces[exchange*cube.num_stickers_face + 1] = cube.faces[face*cube.num_stickers_face + 1];
-        
-        cube.faces[face*cube.num_stickers_face + 0] = cube.faces[face*cube.num_stickers_face + 6];
-        cube.faces[face*cube.num_stickers_face + 1] = cube.faces[face*cube.num_stickers_face + 3];
-        
-        cube.faces[face*cube.num_stickers_face + 6] = cube.faces[face*cube.num_stickers_face + 8];
-        cube.faces[face*cube.num_stickers_face + 3] = cube.faces[face*cube.num_stickers_face + 7];
-        
-        cube.faces[face*cube.num_stickers_face + 8] = cube.faces[face*cube.num_stickers_face + 2];
-        cube.faces[face*cube.num_stickers_face + 7] = cube.faces[face*cube.num_stickers_face + 5];
-        
-        cube.faces[face*cube.num_stickers_face + 2] = cube.faces[exchange*cube.num_stickers_face + 0];
-        cube.faces[face*cube.num_stickers_face + 5] = cube.faces[exchange*cube.num_stickers_face + 1];
-        
-        cube.faces[exchange*cube.num_stickers_face + 0] = exchange;
-        cube.faces[exchange*cube.num_stickers_face + 1] = exchange;
-        break;
-    case 2:
-        cube.faces[exchange*cube.num_stickers_face + 0] = cube.faces[face*cube.num_stickers_face + 0];
-        cube.faces[exchange*cube.num_stickers_face + 1] = cube.faces[face*cube.num_stickers_face + 1];
-        cube.faces[exchange*cube.num_stickers_face + 2] = cube.faces[face*cube.num_stickers_face + 2];
-        cube.faces[exchange*cube.num_stickers_face + 5] = cube.faces[face*cube.num_stickers_face + 5];
-        
-        cube.faces[face*cube.num_stickers_face + 0] = cube.faces[face*cube.num_stickers_face + 8];
-        cube.faces[face*cube.num_stickers_face + 1] = cube.faces[face*cube.num_stickers_face + 7];
-        cube.faces[face*cube.num_stickers_face + 2] = cube.faces[face*cube.num_stickers_face + 6];
-        cube.faces[face*cube.num_stickers_face + 5] = cube.faces[face*cube.num_stickers_face + 3];
-        
-        cube.faces[face*cube.num_stickers_face + 8] = cube.faces[exchange*cube.num_stickers_face + 0];
-        cube.faces[face*cube.num_stickers_face + 7] = cube.faces[exchange*cube.num_stickers_face + 1];
-        cube.faces[face*cube.num_stickers_face + 6] = cube.faces[exchange*cube.num_stickers_face + 2];
-        cube.faces[face*cube.num_stickers_face + 3] = cube.faces[exchange*cube.num_stickers_face + 5];
-        
-        cube.faces[exchange*cube.num_stickers_face + 0] = exchange;
-        cube.faces[exchange*cube.num_stickers_face + 1] = exchange;
-        cube.faces[exchange*cube.num_stickers_face + 2] = exchange;
-        cube.faces[exchange*cube.num_stickers_face + 5] = exchange;
-        break;
-    case 3:
-        cube.faces[exchange*cube.num_stickers_face + 0] = cube.faces[face*cube.num_stickers_face + 0];
-        cube.faces[exchange*cube.num_stickers_face + 1] = cube.faces[face*cube.num_stickers_face + 1];
-        
-        cube.faces[face*cube.num_stickers_face + 0] = cube.faces[face*cube.num_stickers_face + 2];
-        cube.faces[face*cube.num_stickers_face + 1] = cube.faces[face*cube.num_stickers_face + 5];
-        
-        cube.faces[face*cube.num_stickers_face + 2] = cube.faces[face*cube.num_stickers_face + 8];
-        cube.faces[face*cube.num_stickers_face + 5] = cube.faces[face*cube.num_stickers_face + 7];
-        
-        cube.faces[face*cube.num_stickers_face + 8] = cube.faces[face*cube.num_stickers_face + 6];
-        cube.faces[face*cube.num_stickers_face + 7] = cube.faces[face*cube.num_stickers_face + 3];
-        
-        cube.faces[face*cube.num_stickers_face + 6] = cube.faces[exchange*cube.num_stickers_face + 0];
-        cube.faces[face*cube.num_stickers_face + 3] = cube.faces[exchange*cube.num_stickers_face + 1];
-        
-        cube.faces[exchange*cube.num_stickers_face + 0] = exchange;
-        cube.faces[exchange*cube.num_stickers_face + 1] = exchange;
-        break;
-    case 0: // No rotation
-        break;
-    }
-}
-*/
+
 void rotate_single_face(cube_t cube, const move_t move){
     face_t tmp;
     face_t *face_matrix;
@@ -369,15 +313,14 @@ void copy_face_section_to_another_face(cube_t cube, move_t move,
     }
     
     int sc, sr, dc, dr;
-    sc = sr = dc = dr = -666;
+    //sc = sr = dc = dr = -666;
     
     //printf_s("si_rm = %i\t si_cm = %i\t sni_m = %i\n", si_rm, si_cm, sni_m);
     //printf_s("sj_rm = %i\t sj_cm = %i\t snj_m = %i\n\n\n", sj_rm, sj_cm, snj_m);
     
     for(i=0; i<layers; i++){
         for(j=0; j<n; j++){
-            
-            // These values adjust the matrix in
+            // These values adjust the matrix indexes
             sr = si_rm*(i -(n-1)*sni_m) + sj_rm*(j -(n-1)*snj_m);
             sc = si_cm*(i -(n-1)*sni_m) + sj_cm*(j -(n-1)*snj_m);
             
@@ -410,11 +353,11 @@ void turn_face_side(cube_t cube, const move_t move){
     int case3 = 0; // false
     switch (rotation){
     case 3:
-        case3 = 1; // true
+        case3 = 2; // true
     case 1:
-        for(int i=(case3?1:4); i>=0 && i<6; i=i+(case3?1:-1)){
+        for(int i=(case3?1:4); i>=0 && i<6; i=i-1+case3){
             source_face = turn_side_order[move.face][i];
-            dest_face = turn_side_order[move.face][i+(case3?-1:1)];
+            dest_face = turn_side_order[move.face][i+1-case3];
             
             index_mod_source = turn_side_table[face][source_face];
             index_mod_dest = turn_side_table[face][dest_face];
@@ -647,31 +590,52 @@ void apply_moves_to_cube(cube_t cube, moves_seq_t seq){
 }
 
 void stress_test(cube_t cube, const char *str, int repetition){
-    struct timeb start, end;
+    struct timespec start, end, diff;
     
     moves_seq_t seq = from_str_to_moves_sequence(cube, str);
     
-    ftime(&start);
+    timespec_get(&start, TIME_UTC);
     for(int i=0; i<repetition; i++){
         apply_moves_to_cube(cube, seq);
     }
-    ftime(&end);
+    timespec_get(&end, TIME_UTC);
     
-    printf("\nIt took %u.%3u seconds to apply \"%s\" %d times.\n",
-            end.time - start.time, end.millitm - start.millitm, str, repetition
+    diff = compute_timespec_difference(end, start);
+    printf_s("\nIt took %u.%09u seconds to apply \"%s\" %d times.\n",
+            diff.tv_sec, diff.tv_nsec, str, repetition
     );
     
     free(seq.moves);
 }
 
+int is_cube_solved(cube_t cube){
+    face_t face;
+    
+    for(int f=0; f<6; f++){
+        face = faces[f];
+        
+        for(int i=0; i<cube.num_stickers_face; i++){
+            if(cube.faces[face*cube.num_stickers_face] != face){
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
 
 
 
+void print_separator(){
+    printf_s("\n-------------------------------------------------------------\n\n");
+}
 
 int main(int argc, char **argv) {
+    struct timespec start, end, diff;
+    
     //char scramble[] = "R U2 R' U2 R U2 L' U R' U' L";
     char *scramble, *str;
     cube_t cube = create_cube(3);
+    
     
     if(cube.faces == NULL){
         printf("Error in memory allocation.\n");
@@ -679,7 +643,49 @@ int main(int argc, char **argv) {
     }
     
     scramble = argv[1];
-    //moves_seq_t seq = from_str_to_moves_sequence(cube, scramble);
+    moves_seq_t seq = from_str_to_moves_sequence(cube, scramble);
+    
+    str = cube_to_one_line_string(cube);
+    printf_s("%s\n\n", str);
+    free(str);
+    str = cube_to_formatted_string(cube);
+    printf_s("%s\n\n", str);
+    free(str);
+    
+    int repetitions = atoi(argv[2]);
+    int cube_solved = 0;
+    
+    for(int i=1; i<=repetitions; i++){
+        print_separator();
+        
+        apply_moves_to_cube(cube, seq);
+        
+        str = cube_to_one_line_string(cube);
+        printf_s("%s\n\n", str);
+        free(str);
+        str = cube_to_formatted_string(cube);
+        printf_s("%s\n\n", str);
+        free(str);
+        
+        printf_s("We have applied \"%s\" %d time(s).\n", scramble, i);
+        
+        timespec_get(&start, TIME_UTC);
+        cube_solved = is_cube_solved(cube);
+        timespec_get(&end, TIME_UTC);
+        
+        if(cube_solved){
+            printf_s("Cube is SOLVED!\n");
+        }
+        else{
+            printf_s("Cube is not solved.\n");
+        }
+        printf_s("It took %u.%09u seconds to check if the cube is solved.\n",
+                diff.tv_sec, diff.tv_nsec);
+    }
+    
+    
+    
+    print_separator();
     
     printf_s("\n");
     str = cube_to_one_line_string(cube);
@@ -689,7 +695,7 @@ int main(int argc, char **argv) {
     printf_s("%s\n\n", str);
     free(str);
     
-    stress_test(cube, scramble, atoi(argv[2]));
+    stress_test(cube, scramble, atoi(argv[3]));
     
     printf_s("\n");
     str = cube_to_one_line_string(cube);
@@ -698,7 +704,6 @@ int main(int argc, char **argv) {
     str = cube_to_formatted_string(cube);
     printf_s("%s\n\n", str);
     free(str);
-    
     
     
     
@@ -787,7 +792,8 @@ int main(int argc, char **argv) {
     */
     
     
-    //free(cube.faces);
+    free(cube.faces);
+    free(seq.moves);
     return 0;
 }
 
