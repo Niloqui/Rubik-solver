@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <time.h>
+#include <time.h> // struct timespec
+// #include <windows.h> // sleep()
 
 struct timespec compute_timespec_difference(struct timespec end, struct timespec start){
     struct timespec diff;
@@ -609,19 +610,59 @@ void stress_test(cube_t cube, const char *str, int repetition){
 }
 
 int is_cube_solved(cube_t cube){
+    /* The cube must be in the standard position (F in F, U in U, etc.) 
+     * to be considered solved.
+     * If the cube is off by a rotation (e.g. "x"), the cube is not considered solved.
+    */
     face_t face;
     
     for(int f=0; f<6; f++){
         face = faces[f];
         
         for(int i=0; i<cube.num_stickers_face; i++){
-            if(cube.faces[face*cube.num_stickers_face] != face){
+            if(cube.faces[face*cube.num_stickers_face + i] != face){
                 return 0;
             }
         }
     }
     return 1;
 }
+
+typedef struct {
+    moves_seq_t initial_rotations;
+    moves_seq_t solution;
+} solution_t;
+
+
+
+
+solution_t solve_cube(cube_t cube){
+    solution_t sol;
+    sol.initial_rotations.len = 0;
+    sol.solution.moves = NULL;
+    sol.initial_rotations.len = 0;
+    sol.solution.moves = NULL;
+    
+    if(cube.num_layers < 2){
+        printf_s("Cube is too small / Error in the data.\n");
+    }
+    else if(cube.num_layers >= 4){
+        printf_s("Cube is too big (%i number of layers), no solver implemented yet.\n",
+                cube.num_layers);
+    }
+    else if(cube.num_layers == 2){
+        
+    }
+    else if(cube.num_layers == 3){
+        
+    }
+    
+    
+    
+    return sol;
+}
+
+
 
 
 
@@ -631,10 +672,11 @@ void print_separator(){
 
 int main(int argc, char **argv) {
     struct timespec start, end, diff;
+    timespec_get(&start, TIME_UTC);
     
     //char scramble[] = "R U2 R' U2 R U2 L' U R' U' L";
     char *scramble, *str;
-    cube_t cube = create_cube(3);
+    cube_t cube = create_cube(2);
     
     
     if(cube.faces == NULL){
@@ -655,6 +697,20 @@ int main(int argc, char **argv) {
     int repetitions = atoi(argv[2]);
     int cube_solved = 0;
     
+    timespec_get(&end, TIME_UTC);
+    
+    diff = compute_timespec_difference(end, start);
+    printf_s("It took %u.%09u seconds to set things up.\n", diff.tv_sec, diff.tv_nsec);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    /*
     for(int i=1; i<=repetitions; i++){
         print_separator();
         
@@ -679,11 +735,10 @@ int main(int argc, char **argv) {
         else{
             printf_s("Cube is not solved.\n");
         }
+        diff = compute_timespec_difference(end, start);
         printf_s("It took %u.%09u seconds to check if the cube is solved.\n",
                 diff.tv_sec, diff.tv_nsec);
     }
-    
-    
     
     print_separator();
     
@@ -704,7 +759,7 @@ int main(int argc, char **argv) {
     str = cube_to_formatted_string(cube);
     printf_s("%s\n\n", str);
     free(str);
-    
+    */
     
     
     /*
@@ -794,6 +849,9 @@ int main(int argc, char **argv) {
     
     free(cube.faces);
     free(seq.moves);
+    
+    print_separator();
+    print_separator();
     return 0;
 }
 
