@@ -506,6 +506,7 @@ move_t get_move_from_substring(const cube_t cube, const char *str, int len){
                 break;
             }
             move.layers = cube.num_layers;
+            face_found = 1;
             break;
         case 4: // Prime moves
             move.rotation = (move.rotation * 3) % 4;
@@ -588,30 +589,98 @@ moves_seq_t from_str_to_moves_sequence(const cube_t cube, const char *str){
     return seq;
 }
 
-char* from_moves_sequence_to_str(moves_seq_t seq){
+char* from_moves_sequence_to_str(const cube_t cube, moves_seq_t seq){
     int max_len = 256;
-    char *str = calloc(max_len, sizeof(char));
+    char *str = calloc(max_len, sizeof(char)), *realloc_str;
     if(str == NULL){
         printf_s("Error in memory allocation.\n");
         return NULL;
     }
     
+    int i, m, j=0;
     char buff[16];
     
-    for(int i=0; i<seq.len; i++){
+    for(m=0; m<seq.len; m++){
+        move_t move = seq.moves[m];
         
+        if(move.rotation == 0){
+            // There is no reason to write a move that has no rotation.
+            continue;
+        }
         
+        // Convert the move from move_t into buff
+        i = 0;
         
+        if(move.layers == cube.num_layers){ // Cube rotation
+            switch (move.face){
+            case R:
+                buff[i] = 'x';
+                break;
+            case U:
+                buff[i] = 'y';
+                break;
+            case F:
+                buff[i] = 'z';
+                break;
+            }
+            i++;
+        }
+        else{ // Normal move
+            if(move.layers >= 3){
+                buff[i] = '0' + move.layers;
+                i++;
+            }
+            
+            buff[i] = get_face_char(move.face);
+            i++;
+            
+            if(move.layers >= 2){
+                buff[i] = 'w';
+                i++;
+            }
+        }
         
+        switch (move.rotation){ // Adding prime or 2 at the end
+        case 2:
+            buff[i] = '2';
+            i++;
+            break;
+        case 3:
+            buff[i] = '\'';
+            i++;
+            break;
+        case 1:
+            break;
+        }
         
+        buff[i] = ' ';
+        buff[i+1] = '\0';
         
+        // Copy the move from buff into str
+        i=0;
         
+        while(buff[i]){
+            if(j == max_len-1){
+                max_len *= 2;
+                realloc_str = realloc(str, max_len);
+                if(realloc_str == NULL){
+                    printf_s("Error in memory reallocation.\n");
+                    free(str);
+                    return NULL;
+                }
+                else{
+                    str = realloc_str;
+                }
+            }
+            
+            str[j] = buff[i];
+            
+            j++;
+            i++;
+        }
     }
     
-    
-    
-    
-    
+    str[j] = '\0';
     
     return str;
 }
@@ -722,8 +791,6 @@ solution_t solve_2x2x2(cube_t cube){
      *  LLFFRRBB        LXXXXXXB
      *    DD              XX
      *    DD              DX
-     *
-     * cube
     */
     sol.initial_rotations.moves = malloc(sizeof(move_t) * 3);
     if(sol.initial_rotations.moves == NULL){
@@ -743,7 +810,7 @@ solution_t solve_2x2x2(cube_t cube){
     y.face = U;
     z.face = F;
     x.rotation = y.rotation = z.rotation = 1;
-    x.layers = y.layers = y.layers = 2;
+    x.layers = y.layers = z.layers = 2;
     
     solution_found = 0;
     for(i=0; i<4 && !solution_found; i++){
@@ -756,8 +823,8 @@ solution_t solve_2x2x2(cube_t cube){
                 sol.initial_rotations.moves[2].rotation = k;
                 
                 solution_found = cube.faces[L*cube.num_stickers_face + 2] == L &&
-                                    cube.faces[B*cube.num_stickers_face + 3] == B &&
-                                    cube.faces[D*cube.num_stickers_face + 2] == D;
+                                 cube.faces[B*cube.num_stickers_face + 3] == B &&
+                                 cube.faces[D*cube.num_stickers_face + 2] == D;
                 
                 if(!solution_found){
                     turn_layer(cube, z);
@@ -794,20 +861,30 @@ solution_t solve_2x2x2(cube_t cube){
     }
     //sol.solution.len = 11;
     
+    /*
     for(i=0; i<11; i++){
         sol.solution.moves[i].face = D;
         sol.solution.moves[i].layers = 7;
         sol.solution.moves[i].rotation = 0;
-    }
+    }*/
     
     max_depth = 0;
-    solution_found = 0;
+    
+    if(is_cube_solved(cube)){
+        solution_found = 1;
+    }
+    else{
+        solution_found = 0;
+    }
+    
     while(!solution_found){
         max_depth++;
         solution_found = solve_2x2x2_recursion(cube, &sol.solution,
                                             get_face_axis(empty), max_depth, 0);
     }
     sol.solution.len = max_depth;
+    
+    
     
     return sol;
 }
@@ -878,86 +955,106 @@ solution_t solve_3x3x3(cube_t cube){
     sol.solution.moves = NULL;
     
     /* First of all we need to rotate the cube in such a way that
-     * the back bottom left corner is solved.
-     *    UU              XX
-     *    UU              XX
-     *  LLFFRRBB        XXXXXXXX
-     *  LLFFRRBB        LXXXXXXB
-     *    DD              XX
-     *    DD              DX
-     *
-     * cube
+     * the U face is in U and the F face is in F.
+     *     UUU                 XXX
+     *     UUU                 XUX
+     *     UUU                 XXX
+     *  LLLFFFRRRBBB        XXXXXXXXXXXX
+     *  LLLFFFRRRBBB        XLXXFXXRXXBX
+     *  LLLFFFRRRBBB        XXXXXXXXXXXX
+     *     DDD                 XXX
+     *     DDD                 XDX
+     *     DDD                 XXX
     */
+    
     sol.initial_rotations.moves = malloc(sizeof(move_t) * 2);
     if(sol.initial_rotations.moves == NULL){
         printf_s("Error in memory allocation: sol.initial_rotations.moves\n");
         return sol;
     }
-    sol.initial_rotations.len = 3;
+    //sol.initial_rotations.len = 2;
     
-    for(i=0; i<3; i++){
+    for(i=0; i<2; i++){
         sol.initial_rotations.moves[i].face = faces[i];
-        sol.initial_rotations.moves[i].layers = 2;
+        sol.initial_rotations.moves[i].layers = 3;
         sol.initial_rotations.moves[i].rotation = 0;
     }
     
-    move_t x, y, z;
-    x.face = R;
-    y.face = U;
-    z.face = F;
-    x.rotation = y.rotation = z.rotation = 1;
-    x.layers = y.layers = y.layers = 2;
+    move_t move;
+    i = 0;
     
-    solution_found = 0;
-    for(i=0; i<4 && !solution_found; i++){
-        sol.initial_rotations.moves[0].rotation = i;
+    // First step is moving U in U
+    if(cube.faces[U*cube.num_stickers_face + 4] != U){
+        // Do something only if U is not already on top
+        move.layers = 3;
         
-        for(j=0; j<4 && !solution_found; j++){
-            sol.initial_rotations.moves[1].rotation = j;
-            
-            for(k=0; k<4 && !solution_found; k++){
-                sol.initial_rotations.moves[2].rotation = k;
-                
-                solution_found = cube.faces[L*cube.num_stickers_face + 2] == L &&
-                                    cube.faces[B*cube.num_stickers_face + 3] == B &&
-                                    cube.faces[D*cube.num_stickers_face + 2] == D;
-                
-                if(!solution_found){
-                    turn_layer(cube, z);
-                }
+        if(cube.faces[R*cube.num_stickers_face + 4] == U){ // z'
+            move.face = F;
+            move.rotation = 3;
+        }
+        else if(cube.faces[L*cube.num_stickers_face + 4] == U){ // z
+            move.face = F;
+            move.rotation = 1;
+        }
+        else if(cube.faces[F*cube.num_stickers_face + 4] == U){ // x
+            move.face = R;
+            move.rotation = 1;
+        }
+        else if(cube.faces[B*cube.num_stickers_face + 4] == U){ // x'
+            move.face = R;
+            move.rotation = 3;
+        }
+        else if(cube.faces[D*cube.num_stickers_face + 4] == U){
+            if(cube.faces[F*cube.num_stickers_face + 4] == F){ // z2
+                move.face = F;
+                move.rotation = 2;
             }
-            
-            if(!solution_found){
-                turn_layer(cube, y);
+            else{ // x2
+                move.face = R;
+                move.rotation = 2;
             }
         }
         
-        if(!solution_found){
-            turn_layer(cube, x);
-        }
+        sol.initial_rotations.moves[i] = move;
+        turn_layer(cube, move);
+        i++;
     }
     
-    if(!solution_found){
-        printf_s("Error: it was not possible to bring the back bottom left corner "
-                "into its solved position during the first phase of the algorithm.\n");
-        free(sol.initial_rotations.moves);
-        sol.initial_rotations.moves = NULL;
-        sol.initial_rotations.len = 0;
-        return sol;
+    // Second step is moving F in F
+    if(cube.faces[F*cube.num_stickers_face + 4] != F){
+        // Do something only if U is not already on top
+        move.layers = 3;
+        move.face = U;
+        
+        if(cube.faces[R*cube.num_stickers_face + 4] == F){ // y
+            move.rotation = 1;
+        }
+        else if(cube.faces[B*cube.num_stickers_face + 4] == F){ // y2
+            move.rotation = 2;
+        }
+        //else if(cube.faces[L*cube.num_stickers_face + 4] == F){ // y'
+        else{ // y'
+            move.rotation = 3;
+        }
+        
+        sol.initial_rotations.moves[i] = move;
+        turn_layer(cube, move);
+        i++;
     }
+    sol.initial_rotations.len = i;
     
     /* The main part of the algorithm is a recursion function
-     * TO-DO: create a table with all the cube states and use that to obtain
+     * TO-DO: create a table with some cube states and use that to help find
      * the solution.
     */
-    sol.solution.moves = malloc(sizeof(move_t) * 11); // 11 is the 2x2 God's Number
+    sol.solution.moves = malloc(sizeof(move_t) * 20); // 20 is the 3x3 God's Number
     if(sol.solution.moves == NULL){
         printf_s("Error in memory allocation: sol.initial_rotations.moves\n");
         return sol;
     }
     //sol.solution.len = 11;
     
-    for(i=0; i<11; i++){
+    for(i=0; i<20; i++){
         sol.solution.moves[i].face = D;
         sol.solution.moves[i].layers = 7;
         sol.solution.moves[i].rotation = 0;
@@ -967,7 +1064,7 @@ solution_t solve_3x3x3(cube_t cube){
     solution_found = 0;
     while(!solution_found){
         max_depth++;
-        solution_found = solve_2x2x2_recursion(cube, &sol.solution,
+        solution_found = solve_3x3x3_recursion(cube, &sol.solution,
                                             get_face_axis(empty), max_depth, 0);
     }
     sol.solution.len = max_depth;
@@ -992,16 +1089,7 @@ solution_t solve_cube(cube_t cube){
                 cube.num_layers);
     }
     else if(cube.num_layers == 2){
-        struct timespec start, end, diff;
-        
-        timespec_get(&start, TIME_UTC);
         sol = solve_2x2x2(cube);
-        timespec_get(&end, TIME_UTC);
-        
-        diff = compute_timespec_difference(end, start);
-        printf_s("\nIt took %u.%09u seconds to solve the 2x2.\n",
-                diff.tv_sec, diff.tv_nsec
-        );
     }
     else if(cube.num_layers == 3){
         // TO-DO
@@ -1029,7 +1117,7 @@ int main(int argc, char **argv) {
     
     //char scramble[] = "R U2 R' U2 R U2 L' U R' U' L";
     char *scramble, *str;
-    cube_t cube = create_cube(2);
+    cube_t cube = create_cube(3);
     
     
     if(cube.faces == NULL){
@@ -1068,29 +1156,28 @@ int main(int argc, char **argv) {
     printf_s("%s\n\n", str);
     free(str);
     
-    solution_t sol;
-    sol = solve_cube(cube);
     
-    printf_s("%16x - %2i ------ %16x - %2i\n\n", 
-        sol.initial_rotations.moves,
-        sol.initial_rotations.len,
-        sol.solution.moves,
-        sol.solution.len
+    solution_t sol;
+    
+    timespec_get(&start, TIME_UTC);
+    sol = solve_cube(cube);
+    timespec_get(&end, TIME_UTC);
+    
+    diff = compute_timespec_difference(end, start);
+    printf_s("\nIt took %u.%09u seconds to solve the 2x2.\n",
+            diff.tv_sec, diff.tv_nsec
     );
     
-    printf_s("\nInitial rotations:\n");
-    for(int i=0; i<sol.initial_rotations.len; i++){
-        move_t move = sol.initial_rotations.moves[i];
-        printf_s("%c - %i - %i - %i\n",
-            get_face_char(move.face), move.face, move.layers, move.rotation);
-    }
+    printf_s("\n\n"
+            "Scramble: %s (%2i moves)\n"
+            "Solution: ", scramble, seq.len);
     
-    printf_s("\nSolution:\n");
-    for(int i=0; i<sol.solution.len; i++){
-        move_t move = sol.solution.moves[i];
-        printf_s("%c - %i - %i - %i\n",
-            get_face_char(move.face), move.face, move.layers, move.rotation);
-    }
+    str = from_moves_sequence_to_str(cube, sol.initial_rotations);
+    printf_s("%s", str);
+    free(str);
+    str = from_moves_sequence_to_str(cube, sol.solution);
+    printf_s("%s (%2i moves)\n", str, sol.solution.len);
+    free(str);
     
     printf_s("\n");
     str = cube_to_one_line_string(cube);
