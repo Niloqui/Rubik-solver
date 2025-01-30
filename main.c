@@ -473,7 +473,7 @@ void turn_layer_3x3x3_opt(cube_t cube, const move_t move){
     __m256i face_m_v = _mm256_mullo_epi32(face_v, n2_v);
     
     
-    for(int j=0; j<3; j++){
+    for(int j=0; j<n; j++){
         __m256i j_v = _mm256_set_epi32(j, j, j, j, j, j, j, j);
         
         second_part_middle_v = _mm256_add_epi32(j_v, second_part_pre_v);
@@ -513,6 +513,99 @@ void turn_layer_3x3x3_opt(cube_t cube, const move_t move){
     
     face_matrix[2] = tmp;
     face_matrix[5] = tmp2;
+}
+
+void turn_layer_2x2x2_opt(cube_t cube, const move_t move){
+    // This function assumes that the cube is a 2x2x2 and that the rotation
+    // is 90° clockwise
+    
+    //turn_face_side(cube, move);
+    face_t face = move.face, tmp;
+    face_t f1, f2, f3, f4;
+    int *f1im, *f2im, *f3im, *f4im;
+    
+    int n = cube.num_layers;
+    int one_m_n = 1 - cube.num_layers;
+    int n2 = cube.num_stickers_face;
+    
+    f1 = tso[face][1];
+    f2 = tso[face][2];
+    f3 = tso[face][3];
+    f4 = tso[face][4];
+    
+    // warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+    #pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
+    f1im = tsim[tst[face][f1]];
+    f2im = tsim[tst[face][f2]];
+    f3im = tsim[tst[face][f3]];
+    f4im = tsim[tst[face][f4]];
+    #pragma GCC diagnostic warning "-Wdiscarded-qualifiers"
+    
+    // i↕, i↔, n_i,  j↕, j↔, n_j,
+    //  0,  1,   2,   3,  4,   5
+    
+    /*
+    sr = si_rm*(i -(n-1)*sni_m) + sj_rm*(j -(n-1)*snj_m);
+    sc = si_cm*(i -(n-1)*sni_m) + sj_cm*(j -(n-1)*snj_m);
+    
+    dr = di_rm*(1-n)*dni_m + dj_rm*(j +(1-n)*dnj_m);
+    dc = di_cm*(1-n)*dni_m + dj_cm*(j +(1-n)*dnj_m);
+    */
+    
+    __m256i row_col_m_v = _mm256_set_epi32(n, 1, n, 1, n, 1, n, 1);
+    __m256i one_m_n_v = _mm256_set_epi32(one_m_n, one_m_n, one_m_n, one_m_n,
+                                         one_m_n, one_m_n, one_m_n, one_m_n);
+    
+    __m256i i_rcm_v = _mm256_set_epi32(f1im[0], f1im[1], f2im[0], f2im[1],
+                                       f3im[0], f3im[1], f4im[0], f4im[1]);
+    __m256i ni_m_v = _mm256_set_epi32(f1im[2], f1im[2], f2im[2], f2im[2],
+                                      f3im[2], f3im[2], f4im[2], f4im[2]);
+    
+    __m256i j_rcm_v = _mm256_set_epi32(f1im[3], f1im[4], f2im[3], f2im[4],
+                                       f3im[3], f3im[4], f4im[3], f4im[4]);
+    __m256i nj_m_v = _mm256_set_epi32(f1im[5], f1im[5], f2im[5], f2im[5],
+                                      f3im[5], f3im[5], f4im[5], f4im[5]);
+    
+    __m256i first_part_v = _mm256_mullo_epi32(i_rcm_v, _mm256_mullo_epi32(one_m_n_v, ni_m_v));
+    __m256i second_part_pre_v = _mm256_mullo_epi32(one_m_n_v, nj_m_v);
+    __m256i second_part_middle_v, second_part_v, indexes_v;
+    int* indexes = (int*)&indexes_v;
+    
+    __m256i face_v = _mm256_set_epi32(f1, f1, f2, f2, f3, f3, f4, f4);
+    __m256i n2_v = _mm256_set_epi32(0, n2, 0, n2, 0, n2, 0, n2);
+    __m256i face_m_v = _mm256_mullo_epi32(face_v, n2_v);
+    
+    
+    for(int j=0; j<n; j++){
+        __m256i j_v = _mm256_set_epi32(j, j, j, j, j, j, j, j);
+        
+        second_part_middle_v = _mm256_add_epi32(j_v, second_part_pre_v);
+        second_part_v = _mm256_mullo_epi32(j_rcm_v, second_part_middle_v);
+        
+        indexes_v = _mm256_add_epi32(first_part_v, second_part_v);
+        indexes_v = _mm256_mullo_epi32(row_col_m_v, indexes_v);
+        indexes_v = _mm256_add_epi32(face_m_v, indexes_v);
+        
+        for(int i=0; i<8; i+=2){
+            indexes[i] = indexes[i] + indexes[i+1];
+        }
+        
+        tmp = cube.faces[indexes[0]];
+        cube.faces[indexes[0]] = cube.faces[indexes[2]];
+        cube.faces[indexes[2]] = cube.faces[indexes[4]];
+        cube.faces[indexes[4]] = cube.faces[indexes[6]];
+        cube.faces[indexes[6]] = tmp;
+    }
+    
+    
+    //rotate_single_face(cube, move);
+    face_t *face_matrix = cube.faces + face*cube.num_stickers_face;
+    
+    tmp = face_matrix[0];
+    face_matrix[0] = face_matrix[2];
+    face_matrix[2] = face_matrix[3];
+    face_matrix[3] = face_matrix[1];
+    face_matrix[1] = tmp;
 }
 
 
@@ -860,13 +953,15 @@ int solve_2x2x2_recursion(cube_t cube, moves_seq_t *seq, int previous_axis,
             
             for(int rot=1; rot<4 && !solution_found; rot++){
                 seq->moves[current_depth].rotation = rot;
-                turn_layer(cube, move_base);
+                turn_layer_2x2x2_opt(cube, move_base);
+                //turn_layer(cube, move_base);
                 
                 solution_found = solve_2x2x2_recursion(cube, seq, get_face_axis(face),
                                                             max_depth, current_depth+1);
             }
             if(!solution_found){
-                turn_layer(cube, move_base);
+                turn_layer_2x2x2_opt(cube, move_base);
+                //turn_layer(cube, move_base);
             }
         }
     }
@@ -1219,7 +1314,7 @@ int main(int argc, char **argv) {
     
     //char scramble[] = "R U2 R' U2 R U2 L' U R' U' L";
     char *scramble, *str;
-    cube_t cube = create_cube(3);
+    cube_t cube = create_cube(2);
     
     
     if(cube.faces == NULL){
