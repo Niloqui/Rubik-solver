@@ -5,6 +5,10 @@
 #include <time.h> // struct timespec
 // #include <windows.h> // Sleep()
 
+#include <immintrin.h>
+// https://github.com/jean553/c-simd-avx2-example
+
+
 struct timespec compute_timespec_difference(struct timespec end, struct timespec start){
     struct timespec diff;
     
@@ -263,6 +267,7 @@ const face_t turn_side_order[7][6] = { //   0, 1, 2, 3, 4, 5,
                             /* D  */ exchange, F, R, B, L, exchange,
                             /* B  */ exchange, U, L, D, R, exchange,
 };
+#define tso turn_side_order
 
 /* RRR    000    RR1    RRR    3RR
  * RRR    RRR    RR1    RRR    3RR
@@ -277,6 +282,7 @@ const unsigned char turn_side_table[7][7] = { //  R,  U,  F, ex,  L,  D,  B,
                                         /* D  */  2, -1,  2,  0,  2, -1,  2,
                                         /* B  */  1,  0, -1,  0,  3,  2, -1,
 };
+#define tst turn_side_table
 
 const int turn_side_index_modifier[][6] = { //    i↕, i↔, n_i,  j↕, j↔, n_j,
                                         /* 0 */    1,  0,   0,   0,  1,   0,
@@ -284,6 +290,7 @@ const int turn_side_index_modifier[][6] = { //    i↕, i↔, n_i,  j↕, j↔, 
                                         /* 2 */   -1,  0,   1,   0, -1,   1,
                                         /* 3 */    0,  1,   0,  -1,  0,   1,
 };
+#define tsim turn_side_index_modifier
 
 void copy_face_section_to_another_face(cube_t cube, move_t move, 
                                     face_t source_face, face_t dest_face,
@@ -334,17 +341,6 @@ void copy_face_section_to_another_face(cube_t cube, move_t move,
             dc = di_cm*(i -(n-1)*dni_m) + dj_cm*(j -(n-1)*dnj_m);
             
             dest_face_p[dr*cube.num_layers + dc] = source_face_p[sr*cube.num_layers + sc];
-            
-            /*
-            printf_s("i = %i\tj = %i\n", i, j);
-            printf_s("source_face = %i\n", source_face);
-            printf_s("turn_side_index_source = %i\n", turn_side_index_source);
-            printf_s("sr = %i\n", sr);
-            printf_s("sc = %i\n", sc);
-            printf_s("turn_side_index_dest = %i\n", turn_side_index_dest);
-            printf_s("dr = %i\n", dr);
-            printf_s("dc = %i\n\n\n", dc);
-            */
         }
     }
 }
@@ -414,6 +410,111 @@ void turn_layer(cube_t cube, const move_t move){
         rotate_single_face(cube, m);
     }
 }
+
+
+void turn_layer_3x3x3_opt(cube_t cube, const move_t move){
+    // This function assumes that the cube is a 3x3x3 and that the rotation
+    // is 90° clockwise
+    
+    //turn_face_side(cube, move);
+    face_t face = move.face, tmp;
+    face_t f1, f2, f3, f4;
+    int *f1im, *f2im, *f3im, *f4im;
+    
+    int n = cube.num_layers;
+    int one_m_n = 1 - cube.num_layers;
+    int n2 = cube.num_stickers_face;
+    
+    f1 = tso[face][1];
+    f2 = tso[face][2];
+    f3 = tso[face][3];
+    f4 = tso[face][4];
+    
+    // warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]
+    #pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
+    f1im = tsim[tst[face][f1]];
+    f2im = tsim[tst[face][f2]];
+    f3im = tsim[tst[face][f3]];
+    f4im = tsim[tst[face][f4]];
+    #pragma GCC diagnostic warning "-Wdiscarded-qualifiers"
+    
+    // i↕, i↔, n_i,  j↕, j↔, n_j,
+    //  0,  1,   2,   3,  4,   5
+    
+    /*
+    sr = si_rm*(i -(n-1)*sni_m) + sj_rm*(j -(n-1)*snj_m);
+    sc = si_cm*(i -(n-1)*sni_m) + sj_cm*(j -(n-1)*snj_m);
+    
+    dr = di_rm*(1-n)*dni_m + dj_rm*(j +(1-n)*dnj_m);
+    dc = di_cm*(1-n)*dni_m + dj_cm*(j +(1-n)*dnj_m);
+    */
+    
+    __m256i row_col_m_v = _mm256_set_epi32(n, 1, n, 1, n, 1, n, 1);
+    __m256i one_m_n_v = _mm256_set_epi32(one_m_n, one_m_n, one_m_n, one_m_n,
+                                         one_m_n, one_m_n, one_m_n, one_m_n);
+    
+    __m256i i_rcm_v = _mm256_set_epi32(f1im[0], f1im[1], f2im[0], f2im[1],
+                                       f3im[0], f3im[1], f4im[0], f4im[1]);
+    __m256i ni_m_v = _mm256_set_epi32(f1im[2], f1im[2], f2im[2], f2im[2],
+                                      f3im[2], f3im[2], f4im[2], f4im[2]);
+    
+    __m256i j_rcm_v = _mm256_set_epi32(f1im[3], f1im[4], f2im[3], f2im[4],
+                                       f3im[3], f3im[4], f4im[3], f4im[4]);
+    __m256i nj_m_v = _mm256_set_epi32(f1im[5], f1im[5], f2im[5], f2im[5],
+                                      f3im[5], f3im[5], f4im[5], f4im[5]);
+    
+    __m256i first_part_v = _mm256_mullo_epi32(i_rcm_v, _mm256_mullo_epi32(one_m_n_v, ni_m_v));
+    __m256i second_part_pre_v = _mm256_mullo_epi32(one_m_n_v, nj_m_v);
+    __m256i second_part_middle_v, second_part_v, indexes_v;
+    int* indexes = (int*)&indexes_v;
+    
+    __m256i face_v = _mm256_set_epi32(f1, f1, f2, f2, f3, f3, f4, f4);
+    __m256i n2_v = _mm256_set_epi32(0, n2, 0, n2, 0, n2, 0, n2);
+    __m256i face_m_v = _mm256_mullo_epi32(face_v, n2_v);
+    
+    
+    for(int j=0; j<3; j++){
+        __m256i j_v = _mm256_set_epi32(j, j, j, j, j, j, j, j);
+        
+        second_part_middle_v = _mm256_add_epi32(j_v, second_part_pre_v);
+        second_part_v = _mm256_mullo_epi32(j_rcm_v, second_part_middle_v);
+        
+        indexes_v = _mm256_add_epi32(first_part_v, second_part_v);
+        indexes_v = _mm256_mullo_epi32(row_col_m_v, indexes_v);
+        indexes_v = _mm256_add_epi32(face_m_v, indexes_v);
+        
+        for(int i=0; i<8; i+=2){
+            indexes[i] = indexes[i] + indexes[i+1];
+        }
+        
+        tmp = cube.faces[indexes[0]];
+        cube.faces[indexes[0]] = cube.faces[indexes[2]];
+        cube.faces[indexes[2]] = cube.faces[indexes[4]];
+        cube.faces[indexes[4]] = cube.faces[indexes[6]];
+        cube.faces[indexes[6]] = tmp;
+    }
+    
+    
+    //rotate_single_face(cube, move);
+    face_t *face_matrix = cube.faces + face*cube.num_stickers_face;
+    face_t tmp2;
+    
+    tmp = face_matrix[0];
+    tmp2 = face_matrix[1];
+    
+    face_matrix[0] = face_matrix[6];
+    face_matrix[1] = face_matrix[3];
+    
+    face_matrix[6] = face_matrix[8];
+    face_matrix[3] = face_matrix[7];
+    
+    face_matrix[8] = face_matrix[2];
+    face_matrix[7] = face_matrix[5];
+    
+    face_matrix[2] = tmp;
+    face_matrix[5] = tmp2;
+}
+
 
 
 typedef struct {
@@ -680,7 +781,9 @@ char* from_moves_sequence_to_str(const cube_t cube, moves_seq_t seq){
         }
     }
     
-    str[j] = '\0';
+    if(j > 0){
+        str[j-1] = '\0';
+    }
     
     return str;
 }
@@ -743,16 +846,16 @@ int solve_2x2x2_recursion(cube_t cube, moves_seq_t *seq, int previous_axis,
         solution_found = is_cube_solved(cube);
     }
     else{
+        move_t move_base;
+        move_base.layers = 1;
+        move_base.rotation = 1;
+        
         for(face_t face=R; face<=F && !solution_found; face++){
             if(get_face_axis(face) == previous_axis){
-                continue; 
+                continue;
             }
             
-            move_t move_base;
             move_base.face = face;
-            move_base.layers = 1;
-            move_base.rotation = 1;
-            
             seq->moves[current_depth] = move_base;
             
             for(int rot=1; rot<4 && !solution_found; rot++){
@@ -891,42 +994,42 @@ solution_t solve_2x2x2(cube_t cube){
 
 
 
-int solve_3x3x3_recursion(cube_t cube, moves_seq_t *seq, int previous_axis,
+int solve_3x3x3_recursion(cube_t cube, moves_seq_t *seq, face_t precious_face,
                         int max_depth, int current_depth){
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    // TO-DO
     int solution_found = 0;
     
     if(current_depth == max_depth){
         solution_found = is_cube_solved(cube);
     }
     else{
-        for(face_t face=R; face<=F && !solution_found; face++){
-            if(get_face_axis(face) == previous_axis){
-                continue; 
+        move_t move_base;
+        move_base.layers = 1;
+        move_base.rotation = 1;
+        
+        for(int i=0; i<6 && !solution_found; i++){
+            face_t face = faces[i];
+            
+            if(face == precious_face){
+                continue;
+            }
+            if(get_face_axis(face) == get_face_axis(precious_face) && face < exchange){
+                continue;
             }
             
-            move_t move_base;
             move_base.face = face;
-            move_base.layers = 1;
-            move_base.rotation = 1;
-            
             seq->moves[current_depth] = move_base;
             
             for(int rot=1; rot<4 && !solution_found; rot++){
                 seq->moves[current_depth].rotation = rot;
-                turn_layer(cube, move_base);
+                turn_layer_3x3x3_opt(cube, move_base);
+                //turn_layer(cube, move_base);
                 
-                solution_found = solve_2x2x2_recursion(cube, seq, get_face_axis(face),
-                                                            max_depth, current_depth+1);
+                solution_found = solve_3x3x3_recursion(cube, seq, face,
+                                                        max_depth, current_depth+1);
             }
             if(!solution_found){
-                turn_layer(cube, move_base);
+                turn_layer_3x3x3_opt(cube, move_base);
+                //turn_layer(cube, move_base);
             }
         }
     }
@@ -935,14 +1038,6 @@ int solve_3x3x3_recursion(cube_t cube, moves_seq_t *seq, int previous_axis,
 }
 
 solution_t solve_3x3x3(cube_t cube){
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    // TO-DO
-    
-    
     // This function assumes that cube.num_layers == 3
     int i, j, k;
     int solution_found;
@@ -1061,11 +1156,19 @@ solution_t solve_3x3x3(cube_t cube){
     }
     
     max_depth = 0;
-    solution_found = 0;
+    
+    if(is_cube_solved(cube)){
+        solution_found = 1;
+    }
+    else{
+        solution_found = 0;
+    }
+    
     while(!solution_found){
         max_depth++;
-        solution_found = solve_3x3x3_recursion(cube, &sol.solution,
-                                            get_face_axis(empty), max_depth, 0);
+        printf_s("Searching solution at depth %i.\n", max_depth);
+        
+        solution_found = solve_3x3x3_recursion(cube, &sol.solution, empty, max_depth, 0);
     }
     sol.solution.len = max_depth;
     
@@ -1092,9 +1195,8 @@ solution_t solve_cube(cube_t cube){
         sol = solve_2x2x2(cube);
     }
     else if(cube.num_layers == 3){
-        // TO-DO
+        sol = solve_3x3x3(cube);
     }
-    
     
     
     
@@ -1164,8 +1266,8 @@ int main(int argc, char **argv) {
     timespec_get(&end, TIME_UTC);
     
     diff = compute_timespec_difference(end, start);
-    printf_s("\nIt took %u.%09u seconds to solve the 2x2.\n",
-            diff.tv_sec, diff.tv_nsec
+    printf_s("\nIt took %u.%09u seconds to solve the %ix%i.\n",
+            diff.tv_sec, diff.tv_nsec, cube.num_layers, cube.num_layers
     );
     
     printf_s("\n\n"
@@ -1173,7 +1275,7 @@ int main(int argc, char **argv) {
             "Solution: ", scramble, seq.len);
     
     str = from_moves_sequence_to_str(cube, sol.initial_rotations);
-    printf_s("%s", str);
+    printf_s("%s ", str);
     free(str);
     str = from_moves_sequence_to_str(cube, sol.solution);
     printf_s("%s (%2i moves)\n", str, sol.solution.len);
@@ -1186,6 +1288,7 @@ int main(int argc, char **argv) {
     str = cube_to_formatted_string(cube);
     printf_s("%s\n\n", str);
     free(str);
+    
     
     
     
