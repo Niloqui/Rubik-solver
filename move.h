@@ -80,6 +80,12 @@ int type_of_move_char(char c){
     case '9':
         return 5;
     
+    // Slice moves
+    case 'M':
+    case 'E':
+    case 'S':
+        return 6;
+    
     // Space between moves
     case ' ':
     //case '\t':
@@ -140,6 +146,21 @@ move_t get_move_from_substring(int cube_num_layers, const char *str, int len){
                 move.layers = str[i] - '0';
             }
             break;
+        case 6: // Slice moves
+            switch (str[i]){
+                case 'M':
+                    move.face = L;
+                    break;
+                case 'E':
+                    move.face = D;
+                    break;
+                case 'S':
+                    move.face = F;
+                    break;
+                }
+            move.layers = cube_num_layers - 1;
+            face_found = 1;
+            break;
         }
     }
     
@@ -161,7 +182,7 @@ moves_seq_t get_move_seq_from_str(int cube_num_layers, const char *str){
     seq.len = 0;
     seq.moves = NULL;
     
-    int i, last_space=-1, str_len=0;
+    int i, last_space=-1, str_len=0, type_of_move, slice_move;
     
     for(i=0; type_of_move_char(str[i]); i++){
         if(str[i] == ' '){
@@ -169,6 +190,10 @@ moves_seq_t get_move_seq_from_str(int cube_num_layers, const char *str){
                 seq.len++;
             }
             last_space = i;
+        }
+        
+        if(str[i] == 'M' || str[i] == 'E' || str[i] == 'S'){
+            seq.len++;
         }
     }
     if(i > last_space+1){
@@ -191,11 +216,19 @@ moves_seq_t get_move_seq_from_str(int cube_num_layers, const char *str){
     int move_index=0, j;
     move_t move;
     
+    slice_move = 0;
     last_space = -1;
     // Loop condition includes the \0 at the end (hence why <= instead of just <)
     // That's because the last move would be lost otherwise
     for(i=0; i<=str_len; i++){
-        if(type_of_move_char(str[i]) > 0){
+        type_of_move = type_of_move_char(str[i]);
+        
+        if(type_of_move == 6){ // Slice move
+            slice_move = 1;
+            continue;
+        }
+        
+        if(type_of_move > 0){ // Substring not completely found yet
             continue;
         }
         
@@ -203,6 +236,15 @@ moves_seq_t get_move_seq_from_str(int cube_num_layers, const char *str){
             move = get_move_from_substring(cube_num_layers, str+last_space+1, i-last_space-1);
             seq.moves[move_index] = move;
             move_index++;
+            
+            if(slice_move){
+                move.layers = 1;
+                move.rotation = (move.rotation * 3) % 4;
+                seq.moves[move_index] = move;
+                move_index++;
+            }
+            
+            slice_move = 0;
         }
         last_space = i;
     }
