@@ -514,25 +514,34 @@ void turn_layer_2x2x2_opt(cube_t cube, const move_t move){
 }
 
 
-void apply_moves_to_cube(cube_t cube, moves_seq_t seq){
+void apply_seq_to_cube(cube_t cube, const moves_seq_t seq){
     for(int i=0; i<seq.len; i++){
         turn_layer(cube, seq.moves[i]);
     }
 }
 
-void stress_test(cube_t cube, const char *str, int repetition){
+void apply_inverse_seq_to_cube(cube_t cube, const moves_seq_t seq){
+    for(int i=seq.len-1; i>=0; i--){
+        move_t move = seq.moves[i];
+        move.rotation = (move.rotation * 3) % 4;
+        turn_layer(cube, move);
+    }
+}
+
+
+void stress_test_cube(cube_t cube, const char *str, int repetition){
     struct timespec start, end, diff;
     
     moves_seq_t seq = get_move_seq_from_str(cube.num_layers, str);
     
     timespec_get(&start, TIME_UTC);
     for(int i=0; i<repetition; i++){
-        apply_moves_to_cube(cube, seq);
+        apply_seq_to_cube(cube, seq);
     }
     timespec_get(&end, TIME_UTC);
     
     diff = compute_timespec_difference(end, start);
-    printf_s("\nIt took %u.%09u seconds to apply \"%s\" %d times.\n",
+    printf_s("\nIt took %u.%09u seconds to apply \"%s\" %d times (cube_t).\n",
             diff.tv_sec, diff.tv_nsec, str, repetition
     );
     

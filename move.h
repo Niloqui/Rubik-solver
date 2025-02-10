@@ -3,19 +3,21 @@
 #include "face.h"
 
 typedef union {
+    // With "unsigned int" the total space is 8 bytes for one move.
+    // With "unsigned char" the total space is 1 byte.
     struct {
         // How many layers
         // R   -> 1
         // Rw  -> 2
         // 3Rw -> 3
         // x   -> 3 (if the cube is a 3x3)
-        unsigned int layers : 3;
+        unsigned char layers : 3;
         
         // How much the face is turning
         // U  -> 1
         // U2 -> 2
         // U' -> 3
-        unsigned int rotation : 2;
+        unsigned char rotation : 2;
         
         face_t face : 3;
     };
