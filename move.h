@@ -25,6 +25,11 @@ typedef union {
     unsigned char u_val;
 } move_t;
 
+move_t get_inverse_move(move_t move){
+    move.rotation = (move.rotation * 3) % 4;
+    return move;
+}
+
 int get_axis_from_move(move_t move){
     return move.face % 4;
 }

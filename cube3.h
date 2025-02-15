@@ -6,7 +6,7 @@
 #include <ctype.h>
 
 // https://github.com/jean553/c-simd-avx2-example
-//#include <immintrin.h>
+#include <immintrin.h>
 
 #include "face.h"
 #include "move.h"
@@ -66,6 +66,17 @@ typedef struct {
     face_t color;
     // char orientation;
 } center_t;
+
+typedef struct {
+    face_t colors[6];
+    char orientation;
+    
+    char piece_type;
+    /* 1 = center
+     * 2 = edge
+     * 3 = corner
+     * /
+} cubie_t;
 */
 
 typedef struct {
@@ -77,17 +88,6 @@ typedef struct {
     corners_e piece;
     char orientation; // 0, 1 or 2
 } corner_t;
-
-typedef struct {
-    face_t colors[6];
-    char orientation;
-    
-    char piece_type;
-    /* 1 = center
-     * 2 = edge
-     * 3 = corner
-     */
-} cubie_t;
 
 typedef struct {
     // UFR, UFL, UBR, UBL, DFR, DFL, DBR, DBL
@@ -123,6 +123,26 @@ face_t corners_face_table[][3] = {
     [DBR] = {D,R,B},
     [DBL] = {D,B,L},
 };
+
+void restore_cube3(cube3_t *cube3_p){
+    for(corners_e i=0; i<CORNER_LAST; i++){
+        cube3_p->corners[i].piece = i;
+        cube3_p->corners[i].orientation = 0;
+    }
+    
+    for(edges_e i=0; i<EDGE_LAST; i++){
+        cube3_p->edges[i].piece = i;
+        cube3_p->edges[i].orientation = 0;
+    }
+}
+
+cube3_t create_solved_cube3(){
+    cube3_t cube3;
+    
+    restore_cube3(&cube3);
+    
+    return cube3;
+}
 
 cube3_t create_cube3(cube_t face_cube){
     // This function assumes that face_cube has num_layers == 3 and
@@ -350,7 +370,7 @@ edges_e edges_move_table[][4] = {
 #define emt edges_move_table
 
 
-cube3_t turn_layer_cube3(cube3_t cube3, const move_t move){
+cube3_t apply_move_to_cube3(cube3_t cube3, const move_t move){
     // Moves with multiple layers will be treated as single layer moves
     // e.g. Rw -> R
     // Moves with 0 layers will still be ignored
@@ -437,7 +457,7 @@ cube3_t turn_layer_cube3(cube3_t cube3, const move_t move){
 
 cube3_t apply_seq_to_cube3(cube3_t cube3, const moves_seq_t seq){
     for(int i=0; i<seq.len; i++){
-        cube3 = turn_layer_cube3(cube3, seq.moves[i]);
+        cube3 = apply_move_to_cube3(cube3, seq.moves[i]);
     }
     
     return cube3;
@@ -445,9 +465,8 @@ cube3_t apply_seq_to_cube3(cube3_t cube3, const moves_seq_t seq){
 
 cube3_t apply_inverse_seq_to_cube3(cube3_t cube3, const moves_seq_t seq){
     for(int i=seq.len-1; i>=0; i--){
-        move_t move = seq.moves[i];
-        move.rotation = (move.rotation * 3) % 4;
-        cube3 = turn_layer_cube3(cube3, move);
+        move_t move = get_inverse_move(seq.moves[i]);
+        cube3 = apply_move_to_cube3(cube3, move);
     }
     
     return cube3;
@@ -474,18 +493,159 @@ void stress_test_cube3(cube3_t cube3, const char *str, int repetition){
 }
 
 
+typedef struct {
+    int cor_o; // corner orientation
+    int cor_p; // corner permutation
+    int edge_o; // edge orientation
+    int edge_p; // edge permutation
+} coord_cube_t;
 
-
-
-/* TO-DO
-
-char* get_str_from_cube(const cube_t cube)
-
-
-
-
-
-*/
+coord_cube_t get_coordinates_from_cube3(cube3_t cube3){
+    coord_cube_t coords;
+    int p[2][8];
+    short sp[16];
+    __m256i helper_v, data_v;
+    
+    
+    coords.cor_o = -1;
+    coords.cor_p = -1;
+    coords.edge_o = -1;
+    coords.edge_p = -1;
+    
+    
+    //// Corner orientation
+    helper_v = _mm256_set_epi32(
+        3*3*3*3*3*3, 3*3*3*3*3, 3*3*3*3, 3*3*3, 3*3, 3, 1, 0
+    );
+    
+    data_v = _mm256_set_epi32(
+        cube3.corners[UFR].orientation,
+        cube3.corners[UFL].orientation,
+        cube3.corners[UBR].orientation,
+        cube3.corners[UBL].orientation,
+        cube3.corners[DFR].orientation,
+        cube3.corners[DFL].orientation,
+        cube3.corners[DBR].orientation,
+        0 //cube3.corners[DBL].orientation
+    );
+    
+    data_v = _mm256_mullo_epi32(data_v, helper_v);
+    
+    coords.cor_o = 0;
+    _mm256_store_si256((__m256i *)p, data_v);
+    //p = (int *)&data_v;
+    for(int i=0; i<8; i++){
+        coords.cor_o += p[0][i];
+    }
+    
+    
+    //// Corner permutation
+    helper_v = _mm256_set_epi32(
+        1*2*3*4*5*6*7, 1*2*3*4*5*6, 1*2*3*4*5, 1*2*3*4, 1*2*3, 1*2, 1, 0
+        //0, 1, 1*2, 1*2*3, 1*2*3*4, 1*2*3*4*5, 1*2*3*4*5*6, 1*2*3*4*5*6*7
+    );
+    
+    for(int i=0; i<8; i++){
+        // Loop starts with i=0 because we need to set p[i]=0
+        p[0][i] = 0;
+        for(int j=0; j<i; j++){
+            if(cube3.corners[j].piece > cube3.corners[i].piece){
+                p[0][i] += 1;
+            }
+        }
+    }
+    
+    data_v = _mm256_load_si256((__m256i *)p);
+    data_v = _mm256_mullo_epi32(data_v, helper_v);
+    
+    coords.cor_p = 0;
+    _mm256_store_si256((__m256i *)p, data_v);
+    for(int i=0; i<8; i++){
+        coords.cor_p += p[0][i];
+    }
+    
+    
+    //// Edge orientation
+    helper_v = _mm256_set_epi16(
+        2*2*2*2*2*2*2*2*2*2, 2*2*2*2*2*2*2*2*2,
+        2*2*2*2*2*2*2*2, 2*2*2*2*2*2*2,
+        2*2*2*2*2*2, 2*2*2*2*2,
+        2*2*2*2, 2*2*2,
+        2*2, 2, 1, 0, 0, 0, 0, 0
+    );
+    
+    //UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR
+    
+    data_v = _mm256_set_epi16(
+        cube3.edges[UR].orientation,
+        cube3.edges[UF].orientation,
+        cube3.edges[UL].orientation,
+        cube3.edges[UB].orientation,
+        cube3.edges[DR].orientation,
+        cube3.edges[DF].orientation,
+        cube3.edges[DL].orientation,
+        cube3.edges[DB].orientation,
+        cube3.edges[FR].orientation,
+        cube3.edges[FL].orientation,
+        cube3.edges[BL].orientation,
+        0, //cube3.edges[BR].orientation,
+        0, 0, 0, 0
+    );
+    
+    data_v = _mm256_mullo_epi16(data_v, helper_v);
+    
+    coords.edge_o = 0;
+    _mm256_store_si256((__m256i *)sp, data_v);
+    for(int i=0+4; i<12+4; i++){
+        coords.edge_o += sp[i];
+    }
+    
+    
+    //// Edge permutation
+    __m256i edge_p_helpers[2] = {
+        _mm256_set_epi32(
+            //1*2*3*4*5*6*7, 1*2*3*4*5*6, 1*2*3*4*5, 1*2*3*4, 1*2*3, 1*2, 1, 0
+            //0, 1, 1*2, 1*2*3, 1*2*3*4, 1*2*3*4*5, 0, 0
+            0, 0, 1*2*3*4*5, 1*2*3*4, 1*2*3, 1*2, 1, 0
+        ),
+        _mm256_set_epi32(
+            0, 0, 
+            1*2*3*4*5*6*7*8*9*10*11, 1*2*3*4*5*6*7*8*9*10,
+            1*2*3*4*5*6*7*8*9, 1*2*3*4*5*6*7*8,
+            1*2*3*4*5*6*7, 1*2*3*4*5*6
+        )
+    };
+    
+    for(int i=0; i<2; i++){
+        for(int j=0; j<8; j++){
+            p[i][j] = 0;
+        }
+    }
+    
+    for(int i=1; i<12; i++){
+        for(int j=0; j<i; j++){
+            if(cube3.edges[j].piece > cube3.edges[i].piece){
+                p[i/6][i%6] += 1;
+            }
+        }
+    }
+    
+    coords.edge_p = 0;
+    for(int i=0; i<2; i++){
+        data_v = _mm256_load_si256((__m256i *)p[i]);
+        data_v = _mm256_mullo_epi32(data_v, edge_p_helpers[i]);
+        
+        _mm256_store_si256((__m256i *)p[i], data_v);
+        
+        for(int j=0; j<6; j++){
+            coords.edge_p += p[i][j];
+        }
+    }
+    
+    
+    
+    return coords;
+}
 
 
 

@@ -21,6 +21,17 @@ typedef struct {
     face_t *faces;
 } cube_t;
 
+void restore_cube(cube_t *cube_p){
+    // This function put all the pieces in the correct position
+    // without finding a solution or applying any move.
+    
+    for(int i=0; i<7; i++){
+        for(int j=0; j<cube_p->num_stickers_face; j++){
+            cube_p->faces[i*cube_p->num_stickers_face + j] = (face_t)i; // face_val
+        }
+    }
+}
+
 cube_t create_cube(int num_layers){
     cube_t cube;
     cube.num_layers = num_layers;
@@ -33,16 +44,12 @@ cube_t create_cube(int num_layers){
         return cube;
     }
     
-    for(int i=0; i<7; i++){
-        //char face_val = get_faceget_face(i);
-        
-        for(int j=0; j<cube.num_stickers_face; j++){
-            cube.faces[i*cube.num_stickers_face + j] = (face_t)i; // face_val
-        }
-    }
+    restore_cube(&cube);
     
     return cube;
 }
+
+
 
 char* get_str_from_cube(const cube_t cube){
     char *str;
@@ -303,7 +310,7 @@ void turn_face_side(cube_t cube, const move_t move){
     
 }
 
-void turn_layer(cube_t cube, const move_t move){
+void apply_move_to_cube(cube_t cube, const move_t move){
     turn_face_side(cube, move);
     rotate_single_face(cube, move);
     
@@ -317,7 +324,7 @@ void turn_layer(cube_t cube, const move_t move){
 }
 
 
-void turn_layer_3x3x3_opt(cube_t cube, const move_t move){
+void apply_move_to_cube_3x3x3_opt(cube_t cube, const move_t move){
     // This function assumes that the cube is a 3x3x3 and that the rotation
     // is 90° clockwise
     
@@ -420,7 +427,7 @@ void turn_layer_3x3x3_opt(cube_t cube, const move_t move){
     face_matrix[5] = tmp2;
 }
 
-void turn_layer_2x2x2_opt(cube_t cube, const move_t move){
+void apply_move_to_cube_2x2x2_opt(cube_t cube, const move_t move){
     // This function assumes that the cube is a 2x2x2 and that the rotation
     // is 90° clockwise
     
@@ -516,15 +523,14 @@ void turn_layer_2x2x2_opt(cube_t cube, const move_t move){
 
 void apply_seq_to_cube(cube_t cube, const moves_seq_t seq){
     for(int i=0; i<seq.len; i++){
-        turn_layer(cube, seq.moves[i]);
+        apply_move_to_cube(cube, seq.moves[i]);
     }
 }
 
 void apply_inverse_seq_to_cube(cube_t cube, const moves_seq_t seq){
     for(int i=seq.len-1; i>=0; i--){
-        move_t move = seq.moves[i];
-        move.rotation = (move.rotation * 3) % 4;
-        turn_layer(cube, move);
+        move_t move = get_inverse_move(seq.moves[i]);
+        apply_move_to_cube(cube, move);
     }
 }
 

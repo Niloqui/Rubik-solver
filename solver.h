@@ -71,17 +71,17 @@ solution_t solve_2x2x2(cube_t cube){
                                  cube.faces[D*cube.num_stickers_face + 2] == D;
                 
                 if(!solution_found){
-                    turn_layer(cube, z);
+                    apply_move_to_cube(cube, z);
                 }
             }
             
             if(!solution_found){
-                turn_layer(cube, y);
+                apply_move_to_cube(cube, y);
             }
         }
         
         if(!solution_found){
-            turn_layer(cube, x);
+            apply_move_to_cube(cube, x);
         }
     }
     
@@ -209,7 +209,7 @@ solution_t solve_3x3x3(cube_t cube){
         }
         
         sol.initial_rotations.moves[i] = move;
-        turn_layer(cube, move);
+        apply_move_to_cube(cube, move);
         i++;
     }
     
@@ -231,7 +231,7 @@ solution_t solve_3x3x3(cube_t cube){
         }
         
         sol.initial_rotations.moves[i] = move;
-        turn_layer(cube, move);
+        apply_move_to_cube(cube, move);
         i++;
     }
     sol.initial_rotations.len = i;
