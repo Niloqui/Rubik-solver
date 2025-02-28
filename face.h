@@ -1,5 +1,7 @@
 #pragma once
 
+#define NUM_FACES 6
+
 typedef enum {
     R = 0,
     U = R+1,

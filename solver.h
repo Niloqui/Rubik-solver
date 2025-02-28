@@ -12,6 +12,16 @@
 #include "move.h"
 #include "cube.h"
 #include "cube3.h"
+#include "coord_cubes.h"
+
+
+
+
+
+
+
+
+
 
 
 

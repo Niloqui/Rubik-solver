@@ -12,42 +12,7 @@
 #include "move.h"
 #include "cube.h"
 
-/* 
-typedef enum {
-    move_R, move_R2, move_Rp,
-    move_U, move_U2, move_Up,
-    move_F, move_F2, move_Fp,
-    move_L, move_L2, move_Lp,
-    move_D, move_D2, move_Dp,
-    move_B, move_B2, move_Bp,
-    LAST_FAST_MOVE
-} fast_move_t;
 
-move_t fast_to_move_table[] = {
-    [move_R]  = {.face = R, .rotation = 1, .layers = 1},
-    [move_R2] = {.face = R, .rotation = 2, .layers = 1},
-    [move_Rp] = {.face = R, .rotation = 3, .layers = 1},
-    [move_U]  = {.face = U, .rotation = 1, .layers = 1},
-    [move_U2] = {.face = U, .rotation = 2, .layers = 1},
-    [move_Up] = {.face = U, .rotation = 3, .layers = 1},
-    [move_F]  = {.face = F, .rotation = 1, .layers = 1},
-    [move_F2] = {.face = F, .rotation = 2, .layers = 1},
-    [move_Fp] = {.face = F, .rotation = 3, .layers = 1},
-    [move_L]  = {.face = L, .rotation = 1, .layers = 1},
-    [move_L2] = {.face = L, .rotation = 2, .layers = 1},
-    [move_Lp] = {.face = L, .rotation = 3, .layers = 1},
-    [move_D]  = {.face = D, .rotation = 1, .layers = 1},
-    [move_D2] = {.face = D, .rotation = 2, .layers = 1},
-    [move_Dp] = {.face = D, .rotation = 3, .layers = 1},
-    [move_B]  = {.face = B, .rotation = 1, .layers = 1},
-    [move_B2] = {.face = B, .rotation = 2, .layers = 1},
-    [move_Bp] = {.face = B, .rotation = 3, .layers = 1},
-};
-
-fast_move_t get_fast_from_move(move_t move){
-    return move.face*3 + move.rotation-1 -(move.face>exchange?3:0);
-}
-*/
 
 typedef enum {
     UFR, UFL, UBR, UBL, DFR, DFL, DBR, DBL, CORNER_LAST,
@@ -55,10 +20,12 @@ typedef enum {
     ULB = UBL,
     DLF = DFL,
     DRB = DBR,
+    NUM_CORNERS = CORNER_LAST
 } corners_e;
 
 typedef enum {
-    UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR, EDGE_LAST
+    UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR, EDGE_LAST,
+    NUM_EDGES = EDGE_LAST
 } edges_e;
 
 /* 
@@ -125,6 +92,9 @@ face_t corners_face_table[][3] = {
 };
 
 void restore_cube3(cube3_t *cube3_p){
+    // This function put all the pieces in the correct position
+    // without finding a solution or applying any move.
+    
     for(corners_e i=0; i<CORNER_LAST; i++){
         cube3_p->corners[i].piece = i;
         cube3_p->corners[i].orientation = 0;
@@ -136,7 +106,7 @@ void restore_cube3(cube3_t *cube3_p){
     }
 }
 
-cube3_t create_solved_cube3(){
+cube3_t create_cube3(){
     cube3_t cube3;
     
     restore_cube3(&cube3);
@@ -144,7 +114,7 @@ cube3_t create_solved_cube3(){
     return cube3;
 }
 
-cube3_t create_cube3(cube_t face_cube){
+cube3_t create_cube3_from_cube(const cube_t face_cube){
     // This function assumes that face_cube has num_layers == 3 and
     // that the cube is in the correct orientation (U in U, F in F)
     
@@ -273,6 +243,81 @@ cube3_t create_cube3(cube_t face_cube){
     return cube;
 }
 
+cube_t create_cube_from_cube3(const cube3_t cube3){
+    cube_t cube = create_cube(3);
+    
+    if(cube.faces == NULL){
+        return cube;
+    }
+    
+    { // Oh God (edges)
+        cube.faces[L*9 + 1] = edge_face_table[cube3.edges[UL].piece][(1 + cube3.edges[UL].orientation) % 2];
+        cube.faces[L*9 + 3] = edge_face_table[cube3.edges[BL].piece][(1 + cube3.edges[BL].orientation) % 2];
+        cube.faces[L*9 + 5] = edge_face_table[cube3.edges[FL].piece][(1 + cube3.edges[FL].orientation) % 2];
+        cube.faces[L*9 + 7] = edge_face_table[cube3.edges[DL].piece][(1 + cube3.edges[DL].orientation) % 2];
+        
+        cube.faces[R*9 + 1] = edge_face_table[cube3.edges[UR].piece][(1 + cube3.edges[UR].orientation) % 2];
+        cube.faces[R*9 + 3] = edge_face_table[cube3.edges[FR].piece][(1 + cube3.edges[FR].orientation) % 2];
+        cube.faces[R*9 + 5] = edge_face_table[cube3.edges[BR].piece][(1 + cube3.edges[BR].orientation) % 2];
+        cube.faces[R*9 + 7] = edge_face_table[cube3.edges[DR].piece][(1 + cube3.edges[DR].orientation) % 2];
+        
+        cube.faces[B*9 + 1] = edge_face_table[cube3.edges[UB].piece][(1 + cube3.edges[UB].orientation) % 2];
+        cube.faces[B*9 + 3] = edge_face_table[cube3.edges[BR].piece][(0 + cube3.edges[BR].orientation) % 2];
+        cube.faces[B*9 + 5] = edge_face_table[cube3.edges[BL].piece][(0 + cube3.edges[BL].orientation) % 2];
+        cube.faces[B*9 + 7] = edge_face_table[cube3.edges[DB].piece][(1 + cube3.edges[DB].orientation) % 2];
+        
+        cube.faces[F*9 + 1] = edge_face_table[cube3.edges[UF].piece][(1 + cube3.edges[UF].orientation) % 2];
+        cube.faces[F*9 + 3] = edge_face_table[cube3.edges[FL].piece][(0 + cube3.edges[FL].orientation) % 2];
+        cube.faces[F*9 + 5] = edge_face_table[cube3.edges[FR].piece][(0 + cube3.edges[FR].orientation) % 2];
+        cube.faces[F*9 + 7] = edge_face_table[cube3.edges[DF].piece][(1 + cube3.edges[DF].orientation) % 2];
+        
+        cube.faces[D*9 + 1] = edge_face_table[cube3.edges[DF].piece][(0 + cube3.edges[DF].orientation) % 2];
+        cube.faces[D*9 + 3] = edge_face_table[cube3.edges[DL].piece][(0 + cube3.edges[DL].orientation) % 2];
+        cube.faces[D*9 + 5] = edge_face_table[cube3.edges[DR].piece][(0 + cube3.edges[DR].orientation) % 2];
+        cube.faces[D*9 + 7] = edge_face_table[cube3.edges[DB].piece][(0 + cube3.edges[DB].orientation) % 2];
+        
+        cube.faces[U*9 + 1] = edge_face_table[cube3.edges[UB].piece][(0 + cube3.edges[UB].orientation) % 2];
+        cube.faces[U*9 + 3] = edge_face_table[cube3.edges[UL].piece][(0 + cube3.edges[UL].orientation) % 2];
+        cube.faces[U*9 + 5] = edge_face_table[cube3.edges[UR].piece][(0 + cube3.edges[UR].orientation) % 2];
+        cube.faces[U*9 + 7] = edge_face_table[cube3.edges[UF].piece][(0 + cube3.edges[UF].orientation) % 2];
+    }
+
+    { // Oh God (corners)
+        cube.faces[L*9 + 0] = corners_face_table[cube3.corners[UBL].piece][(1 + cube3.corners[UBL].orientation*2) % 3];
+        cube.faces[L*9 + 2] = corners_face_table[cube3.corners[UFL].piece][(2 + cube3.corners[UFL].orientation*2) % 3];
+        cube.faces[L*9 + 6] = corners_face_table[cube3.corners[DBL].piece][(2 + cube3.corners[DBL].orientation*2) % 3];
+        cube.faces[L*9 + 8] = corners_face_table[cube3.corners[DFL].piece][(1 + cube3.corners[DFL].orientation*2) % 3];
+        
+        cube.faces[R*9 + 0] = corners_face_table[cube3.corners[UFR].piece][(1 + cube3.corners[UFR].orientation*2) % 3];
+        cube.faces[R*9 + 2] = corners_face_table[cube3.corners[UBR].piece][(2 + cube3.corners[UBR].orientation*2) % 3];
+        cube.faces[R*9 + 6] = corners_face_table[cube3.corners[DFR].piece][(2 + cube3.corners[DFR].orientation*2) % 3];
+        cube.faces[R*9 + 8] = corners_face_table[cube3.corners[DBR].piece][(1 + cube3.corners[DBR].orientation*2) % 3];
+        
+        cube.faces[B*9 + 0] = corners_face_table[cube3.corners[UBR].piece][(1 + cube3.corners[UBR].orientation*2) % 3];
+        cube.faces[B*9 + 2] = corners_face_table[cube3.corners[UBL].piece][(2 + cube3.corners[UBL].orientation*2) % 3];
+        cube.faces[B*9 + 6] = corners_face_table[cube3.corners[DBR].piece][(2 + cube3.corners[DBR].orientation*2) % 3];
+        cube.faces[B*9 + 8] = corners_face_table[cube3.corners[DBL].piece][(1 + cube3.corners[DBL].orientation*2) % 3];
+        
+        cube.faces[F*9 + 0] = corners_face_table[cube3.corners[UFL].piece][(1 + cube3.corners[UFL].orientation*2) % 3];
+        cube.faces[F*9 + 2] = corners_face_table[cube3.corners[UFR].piece][(2 + cube3.corners[UFR].orientation*2) % 3];
+        cube.faces[F*9 + 6] = corners_face_table[cube3.corners[DFL].piece][(2 + cube3.corners[DFL].orientation*2) % 3];
+        cube.faces[F*9 + 8] = corners_face_table[cube3.corners[DFR].piece][(1 + cube3.corners[DFR].orientation*2) % 3];
+        
+        cube.faces[D*9 + 0] = corners_face_table[cube3.corners[DFL].piece][(0 + cube3.corners[DFL].orientation*2) % 3];
+        cube.faces[D*9 + 2] = corners_face_table[cube3.corners[DFR].piece][(0 + cube3.corners[DFR].orientation*2) % 3];
+        cube.faces[D*9 + 6] = corners_face_table[cube3.corners[DBL].piece][(0 + cube3.corners[DBL].orientation*2) % 3];
+        cube.faces[D*9 + 8] = corners_face_table[cube3.corners[DBR].piece][(0 + cube3.corners[DBR].orientation*2) % 3];
+        
+        cube.faces[U*9 + 0] = corners_face_table[cube3.corners[UBL].piece][(0 + cube3.corners[UBL].orientation*2) % 3];
+        cube.faces[U*9 + 2] = corners_face_table[cube3.corners[UBR].piece][(0 + cube3.corners[UBR].orientation*2) % 3];
+        cube.faces[U*9 + 6] = corners_face_table[cube3.corners[UFL].piece][(0 + cube3.corners[UFL].orientation*2) % 3];
+        cube.faces[U*9 + 8] = corners_face_table[cube3.corners[UFR].piece][(0 + cube3.corners[UFR].orientation*2) % 3];
+    }
+    
+    
+    return cube;
+}
+
 int is_cube3_solved(const cube3_t cube3){
     for(edges_e i=0; i<EDGE_LAST; i++){
         if(cube3.edges[i].orientation != 0 || cube3.edges[i].piece != i){
@@ -364,7 +409,7 @@ edges_e edges_move_table[][4] = {
     /* F  */  UF, FR, DF, FL,
     /* ex */  UR, UR, UR, UR,
     /* L  */  UL, FL, DL, BL,
-    /* D  */  DL, DF, DB, DL,
+    /* D  */  DR, DB, DL, DF,
     /* B  */  UB, BL, DB, BR,
 };
 #define emt edges_move_table
@@ -493,159 +538,7 @@ void stress_test_cube3(cube3_t cube3, const char *str, int repetition){
 }
 
 
-typedef struct {
-    int cor_o; // corner orientation
-    int cor_p; // corner permutation
-    int edge_o; // edge orientation
-    int edge_p; // edge permutation
-} coord_cube_t;
 
-coord_cube_t get_coordinates_from_cube3(cube3_t cube3){
-    coord_cube_t coords;
-    int p[2][8];
-    short sp[16];
-    __m256i helper_v, data_v;
-    
-    
-    coords.cor_o = -1;
-    coords.cor_p = -1;
-    coords.edge_o = -1;
-    coords.edge_p = -1;
-    
-    
-    //// Corner orientation
-    helper_v = _mm256_set_epi32(
-        3*3*3*3*3*3, 3*3*3*3*3, 3*3*3*3, 3*3*3, 3*3, 3, 1, 0
-    );
-    
-    data_v = _mm256_set_epi32(
-        cube3.corners[UFR].orientation,
-        cube3.corners[UFL].orientation,
-        cube3.corners[UBR].orientation,
-        cube3.corners[UBL].orientation,
-        cube3.corners[DFR].orientation,
-        cube3.corners[DFL].orientation,
-        cube3.corners[DBR].orientation,
-        0 //cube3.corners[DBL].orientation
-    );
-    
-    data_v = _mm256_mullo_epi32(data_v, helper_v);
-    
-    coords.cor_o = 0;
-    _mm256_store_si256((__m256i *)p, data_v);
-    //p = (int *)&data_v;
-    for(int i=0; i<8; i++){
-        coords.cor_o += p[0][i];
-    }
-    
-    
-    //// Corner permutation
-    helper_v = _mm256_set_epi32(
-        1*2*3*4*5*6*7, 1*2*3*4*5*6, 1*2*3*4*5, 1*2*3*4, 1*2*3, 1*2, 1, 0
-        //0, 1, 1*2, 1*2*3, 1*2*3*4, 1*2*3*4*5, 1*2*3*4*5*6, 1*2*3*4*5*6*7
-    );
-    
-    for(int i=0; i<8; i++){
-        // Loop starts with i=0 because we need to set p[i]=0
-        p[0][i] = 0;
-        for(int j=0; j<i; j++){
-            if(cube3.corners[j].piece > cube3.corners[i].piece){
-                p[0][i] += 1;
-            }
-        }
-    }
-    
-    data_v = _mm256_load_si256((__m256i *)p);
-    data_v = _mm256_mullo_epi32(data_v, helper_v);
-    
-    coords.cor_p = 0;
-    _mm256_store_si256((__m256i *)p, data_v);
-    for(int i=0; i<8; i++){
-        coords.cor_p += p[0][i];
-    }
-    
-    
-    //// Edge orientation
-    helper_v = _mm256_set_epi16(
-        2*2*2*2*2*2*2*2*2*2, 2*2*2*2*2*2*2*2*2,
-        2*2*2*2*2*2*2*2, 2*2*2*2*2*2*2,
-        2*2*2*2*2*2, 2*2*2*2*2,
-        2*2*2*2, 2*2*2,
-        2*2, 2, 1, 0, 0, 0, 0, 0
-    );
-    
-    //UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR
-    
-    data_v = _mm256_set_epi16(
-        cube3.edges[UR].orientation,
-        cube3.edges[UF].orientation,
-        cube3.edges[UL].orientation,
-        cube3.edges[UB].orientation,
-        cube3.edges[DR].orientation,
-        cube3.edges[DF].orientation,
-        cube3.edges[DL].orientation,
-        cube3.edges[DB].orientation,
-        cube3.edges[FR].orientation,
-        cube3.edges[FL].orientation,
-        cube3.edges[BL].orientation,
-        0, //cube3.edges[BR].orientation,
-        0, 0, 0, 0
-    );
-    
-    data_v = _mm256_mullo_epi16(data_v, helper_v);
-    
-    coords.edge_o = 0;
-    _mm256_store_si256((__m256i *)sp, data_v);
-    for(int i=0+4; i<12+4; i++){
-        coords.edge_o += sp[i];
-    }
-    
-    
-    //// Edge permutation
-    __m256i edge_p_helpers[2] = {
-        _mm256_set_epi32(
-            //1*2*3*4*5*6*7, 1*2*3*4*5*6, 1*2*3*4*5, 1*2*3*4, 1*2*3, 1*2, 1, 0
-            //0, 1, 1*2, 1*2*3, 1*2*3*4, 1*2*3*4*5, 0, 0
-            0, 0, 1*2*3*4*5, 1*2*3*4, 1*2*3, 1*2, 1, 0
-        ),
-        _mm256_set_epi32(
-            0, 0, 
-            1*2*3*4*5*6*7*8*9*10*11, 1*2*3*4*5*6*7*8*9*10,
-            1*2*3*4*5*6*7*8*9, 1*2*3*4*5*6*7*8,
-            1*2*3*4*5*6*7, 1*2*3*4*5*6
-        )
-    };
-    
-    for(int i=0; i<2; i++){
-        for(int j=0; j<8; j++){
-            p[i][j] = 0;
-        }
-    }
-    
-    for(int i=1; i<12; i++){
-        for(int j=0; j<i; j++){
-            if(cube3.edges[j].piece > cube3.edges[i].piece){
-                p[i/6][i%6] += 1;
-            }
-        }
-    }
-    
-    coords.edge_p = 0;
-    for(int i=0; i<2; i++){
-        data_v = _mm256_load_si256((__m256i *)p[i]);
-        data_v = _mm256_mullo_epi32(data_v, edge_p_helpers[i]);
-        
-        _mm256_store_si256((__m256i *)p[i], data_v);
-        
-        for(int j=0; j<6; j++){
-            coords.edge_p += p[i][j];
-        }
-    }
-    
-    
-    
-    return coords;
-}
 
 
 

@@ -2,6 +2,8 @@
 
 #include "face.h"
 
+#define NUM_MOVES 3*NUM_FACES // 18
+
 typedef union {
     // With "unsigned int" the total space is 8 bytes for one move.
     // With "unsigned char" the total space is 1 byte.
@@ -356,5 +358,45 @@ char* get_str_from_move_seq(int cube_num_layers, moves_seq_t seq){
     
     return str;
 }
+
+
+
+typedef enum {
+    move_R, move_R2, move_Rp,
+    move_U, move_U2, move_Up,
+    move_F, move_F2, move_Fp,
+    move_L, move_L2, move_Lp,
+    move_D, move_D2, move_Dp,
+    move_B, move_B2, move_Bp,
+    LAST_FAST_MOVE
+} fast_move_t;
+
+move_t fast_to_move_table[] = {
+    [move_R]  = {.face = R, .rotation = 1, .layers = 1},
+    [move_R2] = {.face = R, .rotation = 2, .layers = 1},
+    [move_Rp] = {.face = R, .rotation = 3, .layers = 1},
+    [move_U]  = {.face = U, .rotation = 1, .layers = 1},
+    [move_U2] = {.face = U, .rotation = 2, .layers = 1},
+    [move_Up] = {.face = U, .rotation = 3, .layers = 1},
+    [move_F]  = {.face = F, .rotation = 1, .layers = 1},
+    [move_F2] = {.face = F, .rotation = 2, .layers = 1},
+    [move_Fp] = {.face = F, .rotation = 3, .layers = 1},
+    [move_L]  = {.face = L, .rotation = 1, .layers = 1},
+    [move_L2] = {.face = L, .rotation = 2, .layers = 1},
+    [move_Lp] = {.face = L, .rotation = 3, .layers = 1},
+    [move_D]  = {.face = D, .rotation = 1, .layers = 1},
+    [move_D2] = {.face = D, .rotation = 2, .layers = 1},
+    [move_Dp] = {.face = D, .rotation = 3, .layers = 1},
+    [move_B]  = {.face = B, .rotation = 1, .layers = 1},
+    [move_B2] = {.face = B, .rotation = 2, .layers = 1},
+    [move_Bp] = {.face = B, .rotation = 3, .layers = 1},
+};
+
+fast_move_t get_fast_from_move(move_t move){
+    return move.face*3 + move.rotation-1 -(move.face>exchange?3:0);
+}
+
+
+
 
 
