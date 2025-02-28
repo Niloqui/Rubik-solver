@@ -12,6 +12,7 @@
 #include "move.h"
 #include "cube.h"
 
+#define GOD_N_3X3 20
 
 
 typedef enum {

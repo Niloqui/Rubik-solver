@@ -20,6 +20,7 @@ Compile with the following parameters:
 #include "cube.h"
 #include "cube3.h"
 #include "coord_cubes.h"
+#include "solver.h"
 
 // Kociemba algorithm
 // https://kociemba.org/cube.htm
@@ -63,7 +64,7 @@ int main(int argc, char **argv) {
     timespec_get(&start, TIME_UTC);
     
     //char scramble[] = "R U2 R' U2 R U2 L' U R' U' L";
-    char *scramble, *str;
+    char *scramble, *str, *str2;
     cube_t cube = create_cube(3);
     
     
@@ -78,49 +79,30 @@ int main(int argc, char **argv) {
     free(str);
     
     
-    /* 
     print_separator();
     
     solution_t sol;
     
+    apply_seq_to_cube(cube, seq);
+    
     timespec_get(&start, TIME_UTC);
-    //sol = solve_cube(cube);
+    sol = solve_cube(cube);
     timespec_get(&end, TIME_UTC);
     
     diff = compute_timespec_difference(end, start);
     printf_s("\nIt took %u.%09u seconds to solve the %ix%i.\n",
             diff.tv_sec, diff.tv_nsec, cube.num_layers, cube.num_layers
     );
-     */
     
-    print_separator();
-    
-    cube3_t cube3;
-    coord_cube_t coord_cube;
-    char *str2;
-    
-    cube3 = create_cube3();
-    coord_cube = create_coord_cube_from_cube3(cube3);
-
-    cube3 = apply_seq_to_cube3(cube3, seq);
-    str = get_one_line_str_from_cube3(cube3, 0);
-    printf_s("Moves applied directly to cube3:\n%s\n\n", str);
-    
-    coord_cube = apply_seq_to_coord_cube(coord_cube, seq);
-    cube3 = create_cube3_from_coord_cube(coord_cube);
-    str2 = get_one_line_str_from_cube3(cube3, 0);
-    printf_s("Moves applied to coord_cube:\n%s\n\n", str2);
-    
-    
-    printf_s("%s\n%s\n\n", str, str2);
-    
-    
-    printf_s("str1 and str2 are %sequal.", 
-        strcmp(str, str2)==0?"":"NOT "
-    );
+    str = get_str_from_move_seq(3, sol.initial_rotations);
+    str2 = get_str_from_move_seq(3, sol.solution);
+    printf_s("Solution: %s%s%s\n", str, str[0]=='\0'?"":" ", str2);
     
     free(str);
     free(str2);
+    
+    
+    print_separator();
     
     
     /* 

@@ -59,4 +59,8 @@ face_t get_facet_from_char(char c){
     }
 }
 
+int get_axis_from_face(face_t face){
+    return face % 4;
+}
+
 

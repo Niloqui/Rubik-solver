@@ -36,10 +36,6 @@ int get_axis_from_move(move_t move){
     return move.face % 4;
 }
 
-int get_axis_from_face(face_t face){
-    return face % 4;
-}
-
 typedef struct {
     move_t *moves;
     int len;
@@ -390,6 +386,7 @@ move_t fast_to_move_table[] = {
     [move_B]  = {.face = B, .rotation = 1, .layers = 1},
     [move_B2] = {.face = B, .rotation = 2, .layers = 1},
     [move_Bp] = {.face = B, .rotation = 3, .layers = 1},
+    [LAST_FAST_MOVE] = {.face = R, .rotation = 0, .layers = 1},
 };
 
 fast_move_t get_fast_from_move(move_t move){

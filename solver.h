@@ -17,14 +17,6 @@
 
 
 
-
-
-
-
-
-
-
-
 solution_t solve_2x2x2(cube_t cube){
     // This function assumes that cube.num_layers == 2
     int i, j, k;
@@ -146,6 +138,42 @@ solution_t solve_2x2x2(cube_t cube){
     return sol;
 }
 
+int solve_3x3x3_recursion(coord_cube_t coord_cube, fast_move_t *fast_ms, face_t last_face, int max_depth, int current_depth){
+    // End of recursion
+    if(current_depth == max_depth){
+        return is_coord_cube_solved(coord_cube);
+    }
+    
+    // Pruning --- TO-DO
+    
+    
+    
+    // Recursion
+    coord_cube_t new_coords;
+    int solution_found = 0;
+    int last_axis = get_axis_from_face(last_face);
+    
+    for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE && !solution_found; fast_m++){
+        face_t face = fast_to_move_table[fast_m].face;
+        int axis = get_axis_from_face(face);
+        
+        if(axis == last_axis && face > exchange){
+            continue;
+        }
+        
+        fast_ms[current_depth] = fast_m;
+        
+        new_coords = apply_fast_move_to_coord_cube(coord_cube, fast_m);
+        solution_found = solve_3x3x3_recursion(new_coords, fast_ms, face, max_depth, current_depth+1);
+    }
+    
+    return solution_found;
+}
+
+
+
+
+
 solution_t solve_3x3x3(cube_t cube){
     // This function assumes that cube.num_layers == 3
     int i, j, k;
@@ -171,10 +199,12 @@ solution_t solve_3x3x3(cube_t cube){
      *     DDD                 XXX
     */
     sol.initial_rotations.moves = (move_t *)malloc(sizeof(move_t) * 2);
+    
     if(sol.initial_rotations.moves == NULL){
         printf_s("Error in memory allocation: sol.initial_rotations.moves\n");
         return sol;
     }
+    sol.solution.moves = sol.initial_rotations.moves + 3;
     //sol.initial_rotations.len = 2;
     
     for(i=0; i<2; i++){
@@ -248,14 +278,14 @@ solution_t solve_3x3x3(cube_t cube){
     
     /* This is the main part of the solving algorithm
     */
-    sol.solution.moves = (move_t *)malloc(sizeof(move_t) * 20); // 20 is the 3x3 God's Number
+    sol.solution.moves = (move_t *)malloc(sizeof(move_t) * GOD_N_3X3); // 20 is the 3x3 God's Number
     if(sol.solution.moves == NULL){
         printf_s("Error in memory allocation: sol.initial_rotations.moves\n");
         return sol;
     }
     //sol.solution.len = 11;
     
-    for(i=0; i<20; i++){
+    for(i=0; i<GOD_N_3X3; i++){
         sol.solution.moves[i].face = D;
         sol.solution.moves[i].layers = 7;
         sol.solution.moves[i].rotation = 0;
@@ -270,14 +300,29 @@ solution_t solve_3x3x3(cube_t cube){
         solution_found = 0;
     }
     
+    cube3_t cube3 = create_cube3_from_cube(cube);
+    coord_cube_t coord_cube = create_coord_cube_from_cube3(cube3);
+    
+    fast_move_t *fast_ms = malloc(sizeof(fast_move_t) * 20);
+    if(fast_ms == NULL){
+        printf_s("Error in memory allocation: fast_ms array\n");
+        return sol;
+    }
+    for(i=0; i<20; i++){
+        fast_ms[i] = LAST_FAST_MOVE;
+    }
+    
     while(!solution_found){
         max_depth++;
         printf_s("Searching solution at depth %i.\n", max_depth);
         
-        //solution_found = solve_3x3x3_recursion(cube, &sol.solution, empty, max_depth, 0);
-        solution_found = 1;
+        solution_found = solve_3x3x3_recursion(coord_cube, fast_ms, empty, max_depth, 0);
     }
+    
     sol.solution.len = max_depth;
+    for(i=0; i<max_depth; i++){
+        sol.solution.moves[i] = fast_to_move_table[fast_ms[i]];
+    }
     
     return sol;
 }

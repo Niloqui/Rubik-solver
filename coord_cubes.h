@@ -405,6 +405,11 @@ cube3_t create_cube3_from_coord_cube(const coord_cube_t coord_cube){
     return cube3;
 }
 
+int is_coord_cube_solved(const coord_cube_t coords){
+    return !(coords.cor_o || coords.cor_p || coords.edge_o ||
+            coords.ud_slice || coords.u_face || coords.d_face);
+}
+
 char* get_str_from_coord_cube(const coord_cube_t coord_cube){
     char *str;
     
