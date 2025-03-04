@@ -157,7 +157,8 @@ int solve_3x3x3_recursion(coord_cube_t coord_cube, fast_move_t *fast_ms, face_t 
         face_t face = fast_to_move_table[fast_m].face;
         int axis = get_axis_from_face(face);
         
-        if(axis == last_axis && face > exchange){
+        if((last_face == face) || (axis == last_axis && face < exchange)){
+            // "face < exchange" means that the face is R, U or F
             continue;
         }
         
