@@ -32,6 +32,10 @@ void initialization(){
     setup_factorial_table();
     setup_n_choose_k_table();
     
+    // 3x3x3 symmetries tables
+    setup_all_symmetries_table();
+    
+    
     // 3x3x3 movement tables
     timespec_get(&start, TIME_UTC);
     if(setup_movement_tables_3x3x3()){
@@ -66,6 +70,8 @@ int main(int argc, char **argv) {
     //char scramble[] = "R U2 R' U2 R U2 L' U R' U' L";
     char *scramble, *str, *str2;
     cube_t cube = create_cube(3);
+    cube3_t cube3 = create_cube3();
+    coord_cube_t coords = create_coord_cube(), coords2;
     
     
     scramble = argv[1];
@@ -74,11 +80,11 @@ int main(int argc, char **argv) {
     
     printf_s("scramble = %s\n", scramble);
     printf_s("str      = %s\n", str);
-    printf_s("%i\n", seq.len);
+    printf_s("seq.len  = %i\n", seq.len);
     
     free(str);
     
-    
+    /* 
     print_separator();
     
     solution_t sol;
@@ -100,9 +106,102 @@ int main(int argc, char **argv) {
     
     free(str);
     free(str2);
+     */
+    
+    
+    /* 
+    print_separator();
+    
+    cube3_t cube3 = create_cube3();
+    int sym_idx = atoi(argv[2]);
+    
+    cube3 = apply_seq_to_cube3(cube3, seq);
+    
+    free(cube.faces);
+    cube = create_cube_from_cube3(cube3);
+    
+    str = get_str_from_cube(cube);
+    printf_s("Normal cube (is_cube3_solved = %i):\n%s\n", is_cube3_solved(cube3), str);
+    free(str);
+    
+    
+    cube3 = apply_symmetry_on_cube3(cube3, sym_idx);
+    free(cube.faces);
+    cube = create_cube_from_cube3(cube3);
+    
+    //remap_face_on_cube_no_centers(cube, sym_idx);
+    
+    str = get_str_from_cube(cube);
+    printf_s("Cube after symmetry (is_cube3_solved = %i):\n%s\n", is_cube3_solved(cube3), str);
+    free(str);
+     */
     
     
     print_separator();
+    
+    /* 
+    int i;
+    fast_move_t fast_m, fast_m2;
+    for(i=0; i<SYMMETRIES_N; i++){
+        printf_s("\n\n---Symmetry %i\n", i);
+        for(fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
+            fast_m2 = fast_m;
+            printf_s("%2i -> ", fast_m2);
+            
+            fast_m2 = symmetries_inv_fast_m_table[i][fast_m2];
+            printf_s("%2i -> ", fast_m2);
+            
+            fast_m2 = symmetries_fast_m_table[i][fast_m2];
+            printf_s("%2i --- ", fast_m2);
+            
+            printf_s("%s\n", fast_m==fast_m2?"equal":"NOT EQUAL");
+        }
+    }
+     */
+    
+    
+    
+    print_separator();
+    
+    /* 
+    cube3 = apply_seq_to_cube3(cube3, seq);
+    int ud_slice_coord = get_coord_ud_slice_permutation(cube3);
+    
+    int sym_coord = ud_slice_sorted_raw_to_sym_table[ud_slice_coord][0];
+    int sym_sym = ud_slice_sorted_raw_to_sym_table[ud_slice_coord][1];
+    
+    printf_s("ud_slice_coord  = %i\n\n"
+             "sym_coord_total = %i\n"
+             "sym_coord       = %i\n"
+             "symmetry        = %i\n"
+             "sym_to_raw      = %i\n",
+             ud_slice_coord,
+             sym_coord*SYMMETRIES_N + sym_sym, 
+             sym_coord, 
+             sym_sym,
+             ud_slice_sorted_sym_to_raw_table[sym_coord]);
+     */
+    
+    
+    
+    
+    /* 
+    unsigned long long int val = (UDSLICE_N * CORNER_ORI_N * EDGE_ORI_N) / 4;
+    char *test = malloc(sizeof(char) * val);
+    
+    printf_s("val = %llu\ntest = %p\n", val, test);
+    
+    if(test){
+        for(unsigned long long int i=0; i<val; i++){
+            test[i] = 'a';
+        }
+    }
+     */
+    
+    
+    
+    
+    
     
     
     /* 
@@ -129,6 +228,8 @@ int main(int argc, char **argv) {
     
     
     free(cube.faces);
+    
+    free(move_tbs.main_index);
     return 0;
 }
 

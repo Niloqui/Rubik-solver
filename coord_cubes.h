@@ -17,15 +17,16 @@
 #include "cube3.h"
 
 
-#define CORNER_PERM_N 1*2*3*4*5*6*7*8           // 40320
-#define CORNER_ORI_N 3*3*3*3*3*3*3              // 2187
-#define EDGE_PERM_N 1*2*3*4*5*6*7*8*9*10*11*12  // 479001600
-#define EDGE_ORI_N 2*2*2*2*2*2*2*2*2*2*2        // 2048
+#define CORNER_PERM_N (1*2*3*4*5*6*7*8)             // 40320
+#define CORNER_ORI_N (3*3*3*3*3*3*3)                // 2187
+#define EDGE_PERM_N (1*2*3*4*5*6*7*8*9*10*11*12)    // 479001600
+#define EDGE_ORI_N (2*2*2*2*2*2*2*2*2*2*2)          // 2048
 
-#define UDSLICE_N 9*10*11*12                    // 11880
+#define UDSLICE_N (9*10*11*12)                      // 11880
+#define UDSLICE_EQUI_N 788                          // Equivalence classes
 
-#define SOLVER_SYMMETRIES_N 4*2*2               // 16
-#define SYMMETRIES_N 3*SOLVER_SYMMETRIES_N      // 48
+//#define SOLVER_SYMMETRIES_N 4*2*2               // 16
+//#define SYMMETRIES_N 3*SOLVER_SYMMETRIES_N      // 48    // Defined in cube3.h (another value)
 
 
 int n_choose_k_table[NUM_EDGES][4] = {-1};
@@ -42,6 +43,9 @@ void setup_n_choose_k_table(){
 }
 
 
+int ud_slice_sorted_sym_to_raw_table[UDSLICE_EQUI_N];
+int ud_slice_sorted_raw_to_sym_table[UDSLICE_N][2];
+
 typedef struct {
     int cor_o; // Corner orientation
     int cor_p; // Corner permutation
@@ -51,6 +55,9 @@ typedef struct {
     // Edge permutation divided in three indexes
     // Based on UDSliceSorted
     int ud_slice, u_face, d_face;
+    
+    // Sym coordinates
+    int ud_sym_c, ud_sym_s;
 } coord_cube_t;
 
 int get_coord_corner_orientation(cube3_t cube3){
@@ -264,6 +271,9 @@ coord_cube_t create_coord_cube_from_cube3(const cube3_t cube3){
     coords.u_face = get_coord_u_face_permutation(cube3);
     coords.d_face = get_coord_d_face_permutation(cube3);
     
+    coords.ud_sym_c = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][0];
+    coords.ud_sym_s = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][1];
+    
     return coords;
 }
 
@@ -273,6 +283,8 @@ coord_cube_t create_coord_cube(){
     coords.cor_o = coords.cor_p = coords.edge_o = 0;
     //coords.edge_p = 0;
     coords.ud_slice = coords.d_face = coords.u_face = 0;
+    
+    coords.ud_sym_c = coords.ud_sym_s = 0;
     
     return coords;
 }
@@ -436,150 +448,6 @@ char* get_str_from_coord_cube(const coord_cube_t coord_cube){
 }
 
 
-const cube3_t symmetries_base[3] = {
-    // Orientation for corners is used as a multiplication factor,
-    // it's not the final state of the corner.
-    /*  So, this is the table conversion (modulo 3)
-             1   2   <- table orientation value
-            _______
-        0   |0   0
-        1   |1   2
-        2   |2   1
-        ^
-        |
-    original corner orientation value
-    */
-    { // S_U4
-        .corners = {
-            [UFR] = {.piece = UFL, .orientation = 1},
-            [UFL] = {.piece = UBL, .orientation = 1},
-            [UBR] = {.piece = UFR, .orientation = 1},
-            [UBL] = {.piece = UBR, .orientation = 1},
-            [DFR] = {.piece = DFL, .orientation = 1},
-            [DFL] = {.piece = DBL, .orientation = 1},
-            [DBR] = {.piece = DFR, .orientation = 1},
-            [DBL] = {.piece = DBR, .orientation = 1},
-        },
-        .edges = {
-            [UR] = {.piece = UF, .orientation = 0},
-            [UF] = {.piece = UL, .orientation = 0},
-            [UL] = {.piece = UB, .orientation = 0},
-            [UB] = {.piece = UR, .orientation = 0},
-            [DR] = {.piece = DF, .orientation = 0},
-            [DF] = {.piece = DL, .orientation = 0},
-            [DL] = {.piece = DB, .orientation = 0},
-            [DB] = {.piece = DR, .orientation = 0},
-            [FR] = {.piece = FL, .orientation = 1},
-            [FL] = {.piece = BL, .orientation = 1},
-            [BL] = {.piece = BR, .orientation = 1},
-            [BR] = {.piece = FR, .orientation = 1},
-        },
-    },
-    { // S_F2
-        .corners = {
-            [UFR] = {.piece = DFL, .orientation = 1},
-            [UFL] = {.piece = DFR, .orientation = 1},
-            [UBR] = {.piece = DBL, .orientation = 1},
-            [UBL] = {.piece = DBR, .orientation = 1},
-            [DFR] = {.piece = UFL, .orientation = 1},
-            [DFL] = {.piece = UFR, .orientation = 1},
-            [DBR] = {.piece = UBL, .orientation = 1},
-            [DBL] = {.piece = UBR, .orientation = 1},
-        },
-        .edges = {
-            [UR] = {.piece = DL, .orientation = 0},
-            [UF] = {.piece = DF, .orientation = 0},
-            [UL] = {.piece = DR, .orientation = 0},
-            [UB] = {.piece = DB, .orientation = 0},
-            [DR] = {.piece = UL, .orientation = 0},
-            [DF] = {.piece = UF, .orientation = 0},
-            [DL] = {.piece = UR, .orientation = 0},
-            [DB] = {.piece = UB, .orientation = 0},
-            [FR] = {.piece = FL, .orientation = 0},
-            [FL] = {.piece = FR, .orientation = 0},
-            [BL] = {.piece = BR, .orientation = 0},
-            [BR] = {.piece = BL, .orientation = 0},
-        },
-    },
-    { // S_LR2
-        .corners = {
-            [UFR] = {.piece = UFL, .orientation = 2},
-            [UFL] = {.piece = UFR, .orientation = 2},
-            [UBR] = {.piece = UBL, .orientation = 2},
-            [UBL] = {.piece = UBR, .orientation = 2},
-            [DFR] = {.piece = DFL, .orientation = 2},
-            [DFL] = {.piece = DFR, .orientation = 2},
-            [DBR] = {.piece = DBL, .orientation = 2},
-            [DBL] = {.piece = DBR, .orientation = 2},
-        },
-        .edges = {
-            [UR] = {.piece = UL, .orientation = 0},
-            [UF] = {.piece = UF, .orientation = 0},
-            [UL] = {.piece = UR, .orientation = 0},
-            [UB] = {.piece = UB, .orientation = 0},
-            [DR] = {.piece = DL, .orientation = 0},
-            [DF] = {.piece = DF, .orientation = 0},
-            [DL] = {.piece = DR, .orientation = 0},
-            [DB] = {.piece = DB, .orientation = 0},
-            [FR] = {.piece = FL, .orientation = 0},
-            [FL] = {.piece = FR, .orientation = 0},
-            [BL] = {.piece = BR, .orientation = 0},
-            [BR] = {.piece = BL, .orientation = 0},
-        },
-    },
-};
-
-const face_t remapping_move_symmetries_table[][7] = {
-    { // S_U4 (y)
-        /* R  */ F,
-        /* U  */ U,
-        /* F  */ L,
-        /* ex */ exchange,
-        /* L  */ B,
-        /* D  */ D,
-        /* B  */ R,
-    },
-    { // S_F2 (z2)
-        /* R  */ L,
-        /* U  */ D,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
-        /* F  */ F,
-        /* ex */ exchange,
-        /* L  */ R,
-        /* D  */ U,
-        /* B  */ B,
-    },
-    { // S_LR2 (Reflection)
-        /* R  */ L,
-        /* U  */ U,
-        /* F  */ F,
-        /* ex */ exchange,
-        /* L  */ R,
-        /* D  */ D,
-        /* B  */ B,
-    },
-};
-
-cube3_t apply_symmetry_on_cube3(cube3_t cube3, int sym_idx){
-    cube3_t sym = symmetries_base[sym_idx];
-    cube3_t result;
-    
-    for(edges_e i=0; i<NUM_EDGES; i++){
-        result.edges[i].orientation = (sym.edges[i].orientation + 
-                cube3.edges[sym.edges[i].piece].orientation) % 2;
-        
-        result.edges[i].piece = cube3.edges[sym.edges[i].piece].piece;
-    }
-    
-    for(corners_e i=0; i<NUM_CORNERS; i++){
-        result.corners[i].piece = cube3.corners[sym.corners[i].piece].piece;
-        
-        result.corners[i].orientation = (cube3.corners[sym.corners[i].piece].orientation *
-                sym.corners[i].orientation) % 3;
-    }
-    
-    return result;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// Tables //////////////////////////////////
@@ -595,6 +463,8 @@ typedef struct{
     int *edge_o; // edge_o[EDGE_ORI_N][NUM_MOVES]
     //int *edge_p;
     int *ud_slice, *u_face, *d_face; // ud_slice[UDSLICE_N][NUM_MOVES]
+    
+    int *ud_slice_sym; // ud_slice_sym[UDSLICE_EQUI_N][NUM_MOVES][2]
 } movement_table_t;
 
 movement_table_t move_tbs;
@@ -731,6 +601,94 @@ int allocate_move_table(const char *file_name, char *base_check_array, int check
     return 0;
 }
 
+void setup_ud_slice_sym_table(){
+    cube3_t cube3 = create_cube3(), temp_cube3;
+    
+    int i, j, idx, ud_slice_coord;
+    
+    // "ud_slice_sorted_raw_to_sym_table" is used as visited array
+    for(i=0; i<UDSLICE_N; i++){
+        ud_slice_sorted_raw_to_sym_table[i][0] = -1;
+        ud_slice_sorted_raw_to_sym_table[i][1] = -1;
+    }
+    
+    //// First phase: initiliaze "ud_slice_sorted_sym_to_raw_table"
+    //                     and "ud_slice_sorted_raw_to_sym_table"
+    idx = 0;
+    for(i=0; i<UDSLICE_N; i++){
+        if(ud_slice_sorted_raw_to_sym_table[i][0] >= 0){
+            // Already visited state
+            continue;
+        }
+        ud_slice_sorted_sym_to_raw_table[idx] = i;
+        
+        // Cleaning the cube pieces.
+        // This is done because the "get_inverse_coord_4_edges_permutation" function
+        // only modifies the values for the UD slice pieces,
+        // leaving everything else the same.
+        // Normally this function is used also for U face and D face pieces (so all edges),
+        // so this problem never happens, but in this case it's only being used for ud slice
+        // pieces. If the cube is not cleaned, there could be more UD slice pieces in the
+        // edges array, breaking the function.
+        for(j=0; j<NUM_EDGES; j++){
+            cube3.edges[j].piece = UR;
+        }
+        
+        get_inverse_coord_4_edges_permutation(&cube3, i, 0);
+        
+        // j goes backwards because, in case the same value for ud_slice_coord
+        // appears in more than one symmetry,
+        // the symmetry with the lowest value is saved in the table.
+        //for(j=0; j<SYMMETRIES_N; j++){
+        for(j=SYMMETRIES_N-1; j>=0; j--){
+            temp_cube3 = multiply_cube3(symmetries_table[j], cube3);
+            temp_cube3 = multiply_cube3(temp_cube3, symmetries_inverse_table[j]);
+            
+            ud_slice_coord = get_coord_ud_slice_permutation(temp_cube3);
+            
+            //ud_slice_sorted_raw_to_sym_table[ud_slice_coord] = idx*SYMMETRIES_N + j;
+            ud_slice_sorted_raw_to_sym_table[ud_slice_coord][0] = idx;
+            ud_slice_sorted_raw_to_sym_table[ud_slice_coord][1] = j;
+        }
+        
+        idx++;
+    }
+    
+    //// Second phase: set up "move_tbs.ud_slice_sym"
+    //restore_cube3(&cube3);
+    int new_raw_coord, new_sym_coord, new_sym;
+    
+    for(i=0; i<UDSLICE_EQUI_N; i++){
+        ud_slice_coord = ud_slice_sorted_sym_to_raw_table[i];
+        
+        // Cleaning the cube pieces.
+        // Same reasons as in the first phase.
+        for(j=0; j<NUM_EDGES; j++){
+            cube3.edges[j].piece = UR;
+        }
+        get_inverse_coord_4_edges_permutation(&cube3, ud_slice_coord, 0);
+        
+        for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
+            temp_cube3 = apply_move_to_cube3(cube3, fast_to_move_table[fast_m]);
+            
+            new_raw_coord = get_coord_ud_slice_permutation(temp_cube3);
+            
+            new_sym_coord = ud_slice_sorted_raw_to_sym_table[new_raw_coord][0];
+            new_sym = ud_slice_sorted_raw_to_sym_table[new_raw_coord][1];
+            
+            // [UDSLICE_EQUI_N][NUM_MOVES][2]
+            idx = i * NUM_MOVES * 2 + fast_m * 2;
+            
+            move_tbs.ud_slice_sym[idx] = new_sym_coord;
+            move_tbs.ud_slice_sym[idx + 1] = new_sym;
+        }
+    }
+    
+    printf_s("\n\n");
+    return;
+}
+
+
 int setup_movement_tables_3x3x3(){
     ////////////////// DON'T CHANGE THESE
     ////////////////// DON'T CHANGE THESE
@@ -746,7 +704,8 @@ int setup_movement_tables_3x3x3(){
             CORNER_PERM_N * NUM_MOVES +
             CORNER_ORI_N * NUM_MOVES +
             EDGE_ORI_N * NUM_MOVES +
-            UDSLICE_N * 3 * NUM_MOVES
+            UDSLICE_N * 3 * NUM_MOVES +
+            UDSLICE_EQUI_N * 2 * NUM_MOVES
         )
     );
     
@@ -760,6 +719,7 @@ int setup_movement_tables_3x3x3(){
     move_tbs.ud_slice = move_tbs.edge_o + EDGE_ORI_N * NUM_MOVES;
     move_tbs.u_face = move_tbs.ud_slice + UDSLICE_N * NUM_MOVES;
     move_tbs.d_face = move_tbs.u_face + UDSLICE_N * NUM_MOVES;
+    move_tbs.ud_slice_sym = move_tbs.d_face + UDSLICE_N * NUM_MOVES;
     
     // Creating folders
     _mkdir("tables");
@@ -795,25 +755,66 @@ int setup_movement_tables_3x3x3(){
                                 move_tbs.d_face, UDSLICE_N,
                                 get_coord_d_face_permutation);
     
+    setup_ud_slice_sym_table();
     
     printf_s("Number of errors while allocating the movement tables: %i\n\n", error);
     return error;
 }
 
 
+
+
+
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// Moves ///////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-coord_cube_t apply_fast_move_to_coord_cube(coord_cube_t coord_cube, const fast_move_t fast_m){
-    coord_cube.cor_o = move_tbs.cor_o[coord_cube.cor_o*NUM_MOVES + fast_m];
-    coord_cube.cor_p = move_tbs.cor_p[coord_cube.cor_p*NUM_MOVES + fast_m];
-    coord_cube.edge_o = move_tbs.edge_o[coord_cube.edge_o*NUM_MOVES + fast_m];
-    coord_cube.ud_slice = move_tbs.ud_slice[coord_cube.ud_slice*NUM_MOVES + fast_m];
-    coord_cube.u_face = move_tbs.u_face[coord_cube.u_face*NUM_MOVES + fast_m];
-    coord_cube.d_face = move_tbs.d_face[coord_cube.d_face*NUM_MOVES + fast_m];
+coord_cube_t apply_fast_move_to_coord_cube(coord_cube_t coords, const fast_move_t fast_m){
+    coords.cor_o = move_tbs.cor_o[coords.cor_o*NUM_MOVES + fast_m];
+    coords.cor_p = move_tbs.cor_p[coords.cor_p*NUM_MOVES + fast_m];
+    coords.edge_o = move_tbs.edge_o[coords.edge_o*NUM_MOVES + fast_m];
+    coords.ud_slice = move_tbs.ud_slice[coords.ud_slice*NUM_MOVES + fast_m];
+    coords.u_face = move_tbs.u_face[coords.u_face*NUM_MOVES + fast_m];
+    coords.d_face = move_tbs.d_face[coords.d_face*NUM_MOVES + fast_m];
     
-    return coord_cube;
+    // Sym-coordinates movement
+    coords.ud_sym_c = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][0];
+    coords.ud_sym_s = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][1];
+    
+    /* 
+    //// Sym-coordinates movement
+    // inputs: ud_sym_c, ud_sym_s, fast_m
+    
+    // SymMove ------ symmetries_fast_m_table
+    // fast_m1 = symmetries_fast_m_table[ud_sym_s][fast_m];
+    
+    // MoveTable ---- move_tbs.ud_slice_sym
+    // idx = ud_sym_c * NUM_MOVES * 2 + fast_m1 * 2;
+    // new_coord = move_tbs.ud_slice_sym[idx]
+    // new_sym = move_tbs.ud_slice_sym[idx + 1]
+    
+    // SymMult ------ sym_sym_table
+    // new_sym = sym_sym_table[new_sym][ud_sym_s]
+    
+    // output: new_coord, new_sym
+    
+    fast_move_t fast_m1;
+    int idx, new_coord, new_sym;
+    
+    fast_m1 = symmetries_fast_m_table[coords.ud_sym_s][fast_m];
+    
+    idx = coords.ud_sym_c * NUM_MOVES * 2 + fast_m1 * 2;
+    new_coord = move_tbs.ud_slice_sym[idx];
+    new_sym = move_tbs.ud_slice_sym[idx + 1];
+    
+    new_sym = sym_sym_table[new_sym][coords.ud_sym_s];
+    
+    coords.ud_sym_c = new_coord;
+    coords.ud_sym_s = new_sym;
+     */
+    
+    return coords;
 }
 
 coord_cube_t apply_move_to_coord_cube(coord_cube_t coord_cube, const move_t move){

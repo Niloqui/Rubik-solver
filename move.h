@@ -2,7 +2,7 @@
 
 #include "face.h"
 
-#define NUM_MOVES 3*NUM_FACES // 18
+#define NUM_MOVES (3*NUM_FACES) // 18
 
 typedef union {
     // With "unsigned int" the total space is 8 bytes for one move.
