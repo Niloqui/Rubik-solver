@@ -22,11 +22,25 @@
 #define EDGE_PERM_N (1*2*3*4*5*6*7*8*9*10*11*12)    // 479001600
 #define EDGE_ORI_N (2*2*2*2*2*2*2*2*2*2*2)          // 2048
 
+#define MAX_DIM MAX(MAX(CORNER_ORI_N,CORNER_PERM_N),MAX(EDGE_ORI_N, UDSLICE_N))
+
 #define UDSLICE_N (9*10*11*12)                      // 11880
 #define UDSLICE_EQUI_N 788                          // Equivalence classes
 
 //#define SOLVER_SYMMETRIES_N 4*2*2               // 16
 //#define SYMMETRIES_N 3*SOLVER_SYMMETRIES_N      // 48    // Defined in cube3.h (another value)
+
+
+////////////////// DON'T CHANGE THESE
+////////////////// DON'T CHANGE THESE
+char corners_order_base[NUM_CORNERS] = {UFR, UFL, UBR, UBL, DFR, DFL, DBR, DBL};
+char edges_order_base[NUM_EDGES] = {UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR};
+char pieces_order_base[NUM_CORNERS + NUM_EDGES] = {
+    UFR, UFL, UBR, UBL, DFR, DFL, DBR, DBL,
+    UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR
+};
+////////////////// DON'T CHANGE THESE
+////////////////// DON'T CHANGE THESE
 
 
 int n_choose_k_table[NUM_EDGES][4] = {-1};
@@ -43,7 +57,7 @@ void setup_n_choose_k_table(){
 }
 
 
-int ud_slice_sorted_sym_to_raw_table[UDSLICE_EQUI_N];
+int ud_slice_sorted_sym_to_raw_table[UDSLICE_EQUI_N][SYMMETRIES_N];
 int ud_slice_sorted_raw_to_sym_table[UDSLICE_N][2];
 
 typedef struct {
@@ -328,41 +342,47 @@ void get_inverse_coord_4_edges_permutation(cube3_t *cube3_p, int coord, int offs
     }
 }
 
+void get_inverse_corner_orientation(cube3_t *cube3_p, int coord){
+    char total_orientation = 0, orientation;
+    
+    for(int i=NUM_CORNERS-2; i>=0; i--){
+        orientation = coord % 3;
+        
+        cube3_p->corners[i].orientation = orientation;
+        total_orientation += orientation;
+        
+        coord /= 3;
+    }
+    cube3_p->corners[NUM_CORNERS-1].orientation = (total_orientation*2)%3;
+}
+
+void get_inverse_edge_orientation(cube3_t *cube3_p, int coord){
+    char total_orientation = 0, orientation;
+    
+    for(int i=NUM_EDGES-2; i>=0; i--){
+        orientation = coord % 2;
+        
+        cube3_p->edges[i].orientation = orientation;
+        total_orientation += orientation;
+        
+        coord /= 2;
+    }
+    cube3_p->edges[NUM_EDGES-1].orientation = total_orientation%2;
+}
+
 cube3_t create_cube3_from_coord_cube(const coord_cube_t coord_cube){
     cube3_t cube3 = create_cube3();
     int coord;
-    char total_orientation;
-    char orientation;
     //int used_pieces[MAX(NUM_CORNERS,NUM_EDGES)];
     int used_pieces[NUM_CORNERS];
     
     
     // Corner orientation
-    coord = coord_cube.cor_o;
-    total_orientation = 0;
-    for(int i=NUM_CORNERS-2; i>=0; i--){
-        orientation = coord % 3;
-        
-        cube3.corners[i].orientation = orientation;
-        total_orientation += orientation;
-        
-        coord /= 3;
-    }
-    cube3.corners[NUM_CORNERS-1].orientation = (total_orientation*2)%3;
+    get_inverse_corner_orientation(&cube3, coord_cube.cor_o);
     
     
     // Edge orientation
-    coord = coord_cube.edge_o;
-    total_orientation = 0;
-    for(int i=NUM_EDGES-2; i>=0; i--){
-        orientation = coord % 2;
-        
-        cube3.edges[i].orientation = orientation;
-        total_orientation += orientation;
-        
-        coord /= 2;
-    }
-    cube3.edges[NUM_EDGES-1].orientation = total_orientation%2;
+    get_inverse_edge_orientation(&cube3, coord_cube.edge_o);
     
     
     // Corner permutation
@@ -437,12 +457,17 @@ char* get_str_from_coord_cube(const coord_cube_t coord_cube){
         "cor_o = %i\n"
         "cor_p = %i\n"
         "edge_o = %i\n"
-        "ud_slice = %i\n"
         "u_face = %i\n"
-        "d_face = %i\n\n",
+        "d_face = %i\n"
+        "ud_slice = %i\n"
+        "ud_sym_c = %i\n"
+        "ud_sym_s = %i\n\n",
         coord_cube.cor_o, coord_cube.cor_p, coord_cube.edge_o,
-        coord_cube.ud_slice, coord_cube.u_face, coord_cube.d_face
+        coord_cube.u_face, coord_cube.d_face, coord_cube.ud_slice,
+        coord_cube.ud_sym_c, coord_cube.ud_sym_s
     );
+    
+    //ud_sym_c, ud_sym_s
     
     return str;
 }
@@ -450,14 +475,14 @@ char* get_str_from_coord_cube(const coord_cube_t coord_cube){
 
 
 ////////////////////////////////////////////////////////////////////////////
-////////////////////////////////// Tables //////////////////////////////////
+////////////////////////////// Movement Tables /////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
 typedef struct{
     //edges_e edges_order[12];
     //corners_e corners_order[8];
     
-    int *main_index;
+    void *main_index;
     int *cor_o; // cor_o[CORNER_ORI_N][NUM_MOVES]
     int *cor_p; // cor_p[CORNER_PERM_N][NUM_MOVES]
     int *edge_o; // edge_o[EDGE_ORI_N][NUM_MOVES]
@@ -475,22 +500,14 @@ typedef struct{
     cube3_t cube_state;
 } table_entry_t;
 
-int generate_move_table(int *table_p, int table_dim, int (*get_coord_f)(cube3_t)){
-    table_entry_t *cube_queue;
-    unsigned char *visited_nodes;
+int generate_move_table(int *table_p, int table_dim, int (*get_coord_f)(cube3_t),
+                        table_entry_t *cube_queue, unsigned char *visited_nodes){
+    //table_entry_t *cube_queue;
+    //unsigned char *visited_nodes;
     // 0: not visited
     // 1: in list
     // 2: visited
     
-    cube_queue = malloc(table_dim * sizeof(table_entry_t) + 
-                        table_dim * sizeof(unsigned char));
-    
-    if(cube_queue == NULL){
-        printf_s("Error in memory allocation. [generate_move_table()]\n");
-        return 1;
-    }
-    
-    visited_nodes = (unsigned char *)cube_queue + table_dim * sizeof(table_entry_t);
     for(int i=0; i<table_dim; i++){
         visited_nodes[i] = 0;
     }
@@ -536,12 +553,13 @@ int generate_move_table(int *table_p, int table_dim, int (*get_coord_f)(cube3_t)
         printf_s("%i - %i\n", i, visited_nodes[i]);
     } */
     
-    free(cube_queue);
+    //free(cube_queue);
     return 0;
 }
 
 int allocate_move_table(const char *file_name, char *base_check_array, int check_length,
-                        int *table_p, int table_dim, int (*get_coord_f)(cube3_t)){
+                        int *table_p, int table_dim, int (*get_coord_f)(cube3_t),
+                        table_entry_t *cube_queue, unsigned char *visited_nodes){
     // If the table file exists, this function reads it
     // If it doesn't, this function generate a new one and saves it in a file
     
@@ -578,7 +596,8 @@ int allocate_move_table(const char *file_name, char *base_check_array, int check
         //    table_p[i] = -1;
         //}
         
-        error = generate_move_table(table_p, table_dim, get_coord_f);
+        error = generate_move_table(table_p, table_dim, get_coord_f,
+                                    cube_queue, visited_nodes);
         if(error){
             return 1;
         }
@@ -601,26 +620,28 @@ int allocate_move_table(const char *file_name, char *base_check_array, int check
     return 0;
 }
 
+
 void setup_ud_slice_sym_table(){
     cube3_t cube3 = create_cube3(), temp_cube3;
     
-    int i, j, idx, ud_slice_coord;
+    // sym_c = symmetry coordinate
+    // symmetry = index in symmetry table
+    int i, raw, sym_c, new_raw, new_sym_c, symmetry;
     
     // "ud_slice_sorted_raw_to_sym_table" is used as visited array
-    for(i=0; i<UDSLICE_N; i++){
-        ud_slice_sorted_raw_to_sym_table[i][0] = -1;
-        ud_slice_sorted_raw_to_sym_table[i][1] = -1;
+    for(raw=0; raw<UDSLICE_N; raw++){
+        ud_slice_sorted_raw_to_sym_table[raw][0] = -1;
+        ud_slice_sorted_raw_to_sym_table[raw][1] = -1;
     }
     
     //// First phase: initiliaze "ud_slice_sorted_sym_to_raw_table"
-    //                     and "ud_slice_sorted_raw_to_sym_table"
-    idx = 0;
-    for(i=0; i<UDSLICE_N; i++){
-        if(ud_slice_sorted_raw_to_sym_table[i][0] >= 0){
+    //                       and "ud_slice_sorted_raw_to_sym_table"
+    sym_c = 0;
+    for(raw=0; raw<UDSLICE_N; raw++){
+        if(ud_slice_sorted_raw_to_sym_table[raw][0] >= 0){
             // Already visited state
             continue;
         }
-        ud_slice_sorted_sym_to_raw_table[idx] = i;
         
         // Cleaning the cube pieces.
         // This is done because the "get_inverse_coord_4_edges_permutation" function
@@ -630,73 +651,70 @@ void setup_ud_slice_sym_table(){
         // so this problem never happens, but in this case it's only being used for ud slice
         // pieces. If the cube is not cleaned, there could be more UD slice pieces in the
         // edges array, breaking the function.
-        for(j=0; j<NUM_EDGES; j++){
-            cube3.edges[j].piece = UR;
+        for(i=0; i<NUM_EDGES; i++){
+            cube3.edges[i].piece = UR;
         }
         
-        get_inverse_coord_4_edges_permutation(&cube3, i, 0);
+        //if(sym_c == 228){
+        //    printf_s("");
+        //}
+        
+        get_inverse_coord_4_edges_permutation(&cube3, raw, 0);
         
         // j goes backwards because, in case the same value for ud_slice_coord
         // appears in more than one symmetry,
         // the symmetry with the lowest value is saved in the table.
         //for(j=0; j<SYMMETRIES_N; j++){
-        for(j=SYMMETRIES_N-1; j>=0; j--){
-            temp_cube3 = multiply_cube3(symmetries_table[j], cube3);
-            temp_cube3 = multiply_cube3(temp_cube3, symmetries_inverse_table[j]);
+        for(symmetry=SYMMETRIES_N-1; symmetry>=0; symmetry--){
+            temp_cube3 = multiply_cube3(symmetries_inverse_table[symmetry], cube3);
+            temp_cube3 = multiply_cube3(temp_cube3, symmetries_table[symmetry]);
             
-            ud_slice_coord = get_coord_ud_slice_permutation(temp_cube3);
+            new_raw = get_coord_ud_slice_permutation(temp_cube3);
             
             //ud_slice_sorted_raw_to_sym_table[ud_slice_coord] = idx*SYMMETRIES_N + j;
-            ud_slice_sorted_raw_to_sym_table[ud_slice_coord][0] = idx;
-            ud_slice_sorted_raw_to_sym_table[ud_slice_coord][1] = j;
+            ud_slice_sorted_raw_to_sym_table[new_raw][0] = sym_c;
+            ud_slice_sorted_raw_to_sym_table[new_raw][1] = symmetry;
+            
+            ud_slice_sorted_sym_to_raw_table[sym_c][symmetry] = new_raw;
         }
         
-        idx++;
+        //ud_slice_sorted_sym_to_raw_table[sym_c] = raw;
+        sym_c++;
     }
     
     //// Second phase: set up "move_tbs.ud_slice_sym"
     //restore_cube3(&cube3);
-    int new_raw_coord, new_sym_coord, new_sym;
-    
-    for(i=0; i<UDSLICE_EQUI_N; i++){
-        ud_slice_coord = ud_slice_sorted_sym_to_raw_table[i];
+    /* 
+    for(sym_c=0; sym_c<UDSLICE_EQUI_N; sym_c++){
+        raw = ud_slice_sorted_sym_to_raw_table[sym_c];
         
         // Cleaning the cube pieces.
         // Same reasons as in the first phase.
-        for(j=0; j<NUM_EDGES; j++){
-            cube3.edges[j].piece = UR;
+        for(i=0; i<NUM_EDGES; i++){
+            cube3.edges[i].piece = UR;
         }
-        get_inverse_coord_4_edges_permutation(&cube3, ud_slice_coord, 0);
+        get_inverse_coord_4_edges_permutation(&cube3, raw, 0);
         
         for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
             temp_cube3 = apply_move_to_cube3(cube3, fast_to_move_table[fast_m]);
             
-            new_raw_coord = get_coord_ud_slice_permutation(temp_cube3);
+            new_raw = get_coord_ud_slice_permutation(temp_cube3);
             
-            new_sym_coord = ud_slice_sorted_raw_to_sym_table[new_raw_coord][0];
-            new_sym = ud_slice_sorted_raw_to_sym_table[new_raw_coord][1];
+            new_sym_c = ud_slice_sorted_raw_to_sym_table[new_raw][0];
+            symmetry = ud_slice_sorted_raw_to_sym_table[new_raw][1];
             
             // [UDSLICE_EQUI_N][NUM_MOVES][2]
-            idx = i * NUM_MOVES * 2 + fast_m * 2;
+            i = sym_c * NUM_MOVES * 2 + fast_m * 2;
             
-            move_tbs.ud_slice_sym[idx] = new_sym_coord;
-            move_tbs.ud_slice_sym[idx + 1] = new_sym;
+            move_tbs.ud_slice_sym[i] = new_sym_c;
+            move_tbs.ud_slice_sym[i + 1] = symmetry;
         }
     }
-    
-    printf_s("\n\n");
-    return;
+     */
 }
 
 
 int setup_movement_tables_3x3x3(){
-    ////////////////// DON'T CHANGE THESE
-    ////////////////// DON'T CHANGE THESE
-    char corners_order_base[NUM_CORNERS] = {UFR, UFL, UBR, UBL, DFR, DFL, DBR, DBL};
-    char edges_order_base[NUM_EDGES] = {UR, UF, UL, UB, DR, DF, DL, DB, FR, FL, BL, BR};
-    ////////////////// DON'T CHANGE THESE
-    ////////////////// DON'T CHANGE THESE
-    
     int error = 0;
     
     move_tbs.main_index = malloc(
@@ -725,44 +743,60 @@ int setup_movement_tables_3x3x3(){
     _mkdir("tables");
     _mkdir("tables\\3x3x3");
     
-    error += allocate_move_table("tables\\3x3x3\\cor_o.movement",
+    //printf_s("MAX_DIM = %i\n", MAX_DIM);
+    void *helper = malloc(MAX_DIM * sizeof(table_entry_t) + 
+                          MAX_DIM * sizeof(unsigned char));
+    if(helper == NULL){
+        return -2;
+    }
+    
+    table_entry_t *cube_queue;
+    unsigned char *visited_nodes;
+    
+    cube_queue = (table_entry_t *)helper;
+    visited_nodes = (unsigned char *)helper + MAX_DIM * sizeof(table_entry_t);
+    
+    error += allocate_move_table("tables\\3x3x3\\movement.cor_o",
                                 corners_order_base, NUM_CORNERS,
                                 move_tbs.cor_o, CORNER_ORI_N,
-                                get_coord_corner_orientation);
+                                get_coord_corner_orientation,
+                                cube_queue, visited_nodes);
     
-    error += allocate_move_table("tables\\3x3x3\\cor_p.movement",
+    error += allocate_move_table("tables\\3x3x3\\movement.cor_p",
                                 corners_order_base, NUM_CORNERS,
                                 move_tbs.cor_p, CORNER_PERM_N,
-                                get_coord_corner_permutation);
+                                get_coord_corner_permutation,
+                                cube_queue, visited_nodes);
     
-    error += allocate_move_table("tables\\3x3x3\\edge_o.movement",
+    error += allocate_move_table("tables\\3x3x3\\movement.edge_o",
                                 edges_order_base, NUM_EDGES,
                                 move_tbs.edge_o, EDGE_ORI_N,
-                                get_coord_edge_orientation);
+                                get_coord_edge_orientation,
+                                cube_queue, visited_nodes);
     
-    error += allocate_move_table("tables\\3x3x3\\ud_slice.movement",
+    error += allocate_move_table("tables\\3x3x3\\movement.ud_slice",
                                 edges_order_base, NUM_EDGES,
                                 move_tbs.ud_slice, UDSLICE_N,
-                                get_coord_ud_slice_permutation);
+                                get_coord_ud_slice_permutation,
+                                cube_queue, visited_nodes);
     
-    error += allocate_move_table("tables\\3x3x3\\u_face.movement",
+    error += allocate_move_table("tables\\3x3x3\\movement.u_face",
                                 edges_order_base, NUM_EDGES,
                                 move_tbs.u_face, UDSLICE_N,
-                                get_coord_u_face_permutation);
+                                get_coord_u_face_permutation,
+                                cube_queue, visited_nodes);
     
-    error += allocate_move_table("tables\\3x3x3\\d_face.movement",
+    error += allocate_move_table("tables\\3x3x3\\movement.d_face",
                                 edges_order_base, NUM_EDGES,
                                 move_tbs.d_face, UDSLICE_N,
-                                get_coord_d_face_permutation);
-    
-    setup_ud_slice_sym_table();
+                                get_coord_d_face_permutation,
+                                cube_queue, visited_nodes);
     
     printf_s("Number of errors while allocating the movement tables: %i\n\n", error);
+    
+    free(helper);
     return error;
 }
-
-
-
 
 
 
@@ -774,45 +808,14 @@ coord_cube_t apply_fast_move_to_coord_cube(coord_cube_t coords, const fast_move_
     coords.cor_o = move_tbs.cor_o[coords.cor_o*NUM_MOVES + fast_m];
     coords.cor_p = move_tbs.cor_p[coords.cor_p*NUM_MOVES + fast_m];
     coords.edge_o = move_tbs.edge_o[coords.edge_o*NUM_MOVES + fast_m];
+    
     coords.ud_slice = move_tbs.ud_slice[coords.ud_slice*NUM_MOVES + fast_m];
     coords.u_face = move_tbs.u_face[coords.u_face*NUM_MOVES + fast_m];
     coords.d_face = move_tbs.d_face[coords.d_face*NUM_MOVES + fast_m];
     
-    // Sym-coordinates movement
+    // Sym-coordinates "movement"
     coords.ud_sym_c = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][0];
     coords.ud_sym_s = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][1];
-    
-    /* 
-    //// Sym-coordinates movement
-    // inputs: ud_sym_c, ud_sym_s, fast_m
-    
-    // SymMove ------ symmetries_fast_m_table
-    // fast_m1 = symmetries_fast_m_table[ud_sym_s][fast_m];
-    
-    // MoveTable ---- move_tbs.ud_slice_sym
-    // idx = ud_sym_c * NUM_MOVES * 2 + fast_m1 * 2;
-    // new_coord = move_tbs.ud_slice_sym[idx]
-    // new_sym = move_tbs.ud_slice_sym[idx + 1]
-    
-    // SymMult ------ sym_sym_table
-    // new_sym = sym_sym_table[new_sym][ud_sym_s]
-    
-    // output: new_coord, new_sym
-    
-    fast_move_t fast_m1;
-    int idx, new_coord, new_sym;
-    
-    fast_m1 = symmetries_fast_m_table[coords.ud_sym_s][fast_m];
-    
-    idx = coords.ud_sym_c * NUM_MOVES * 2 + fast_m1 * 2;
-    new_coord = move_tbs.ud_slice_sym[idx];
-    new_sym = move_tbs.ud_slice_sym[idx + 1];
-    
-    new_sym = sym_sym_table[new_sym][coords.ud_sym_s];
-    
-    coords.ud_sym_c = new_coord;
-    coords.ud_sym_s = new_sym;
-     */
     
     return coords;
 }
@@ -863,9 +866,418 @@ void stress_test_coord_cube(coord_cube_t coord_cube, const char *str, int repeti
 
 
 
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////// Pruning Tables //////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+typedef struct{
+    void *main_index;
+    char *huge; // huge[UDSLICE_EQUI_N][CORNER_ORI_N][EDGE_ORI_N]
+    long long int huge_dim;
+} pruning_table_t;
+
+pruning_table_t prune_tbs;
+
+int corner_orientantion_symmetries[CORNER_ORI_N][SYMMETRIES_N];
+int edge_orientantion_symmetries[UDSLICE_EQUI_N][EDGE_ORI_N][SYMMETRIES_N];
+
+int check_file_validity_and_read(void *table_p, long long int table_dim, int elem_size, 
+                                char *file_name, char *base_check_array, int check_length){
+    char check_order[NUM_CORNERS + NUM_EDGES]; // = {-1};
+    
+    FILE *f;
+    int error;
+    
+    printf_s("Checking if \"%s\" exists.\n", file_name);
+    error = fopen_s(&f, file_name, "rb");
+    
+    if(error == 0){
+        // File exists, now we must check for the validity.
+        fread_s(check_order, check_length, sizeof(char), check_length, f);
+        
+        for(int i=0; i<check_length; i++){
+            if(check_order[i] != base_check_array[i]){
+                error = 1;
+                break;
+            }
+        }
+    }
+    
+    // error can be modified in the previous section
+    if(error == 0){
+        // File exists and it's ok, now we must read the data.
+        printf_s("File \"%s\" is valid.\n", file_name);
+        
+        // The check_order has been already read
+        fread_s(table_p, table_dim*elem_size, elem_size, table_dim, f);
+    }
+    else{
+        // File doesn't exist or it has wrong piece order.
+        printf_s("File \"%s\" doesn't exist or it is not valid.\n", file_name);
+    }
+    
+    fclose(f);
+    return error;
+}
+
+void setup_corner_orientantion_symmetries(){
+    char file_name[] = "tables\\3x3x3\\symmetries.cor_o";
+    
+    if(check_file_validity_and_read((int *)corner_orientantion_symmetries,
+            CORNER_ORI_N*SYMMETRIES_N, sizeof(int), file_name,
+            corners_order_base, NUM_CORNERS) == 0){
+        // File exists and it's ok
+        // File has been already read
+        printf_s("\n");
+        return;
+    }
+    
+    // File doesn't exist or it has wrong piece order.
+    // The table must be computed here.
+    cube3_t cube3 = create_cube3();
+    cube3_t new_cube3;
+    int coord, sym;
+    int new_coord;
+    
+    for(coord=0; coord<CORNER_ORI_N; coord++){
+        get_inverse_corner_orientation(&cube3, coord);
+        
+        for(sym=0; sym<SYMMETRIES_N; sym++){
+            //new_cube3 = multiply_cube3(symmetries_table[sym], cube3);
+            //new_cube3 = multiply_cube3(new_cube3, symmetries_inverse_table[sym]);
+            new_cube3 = multiply_cube3(symmetries_inverse_table[sym], cube3);
+            new_cube3 = multiply_cube3(new_cube3, symmetries_table[sym]);
+            
+            new_coord = get_coord_corner_orientation(new_cube3);
+            
+            //corner_orientantion_symmetries[coord][sym] = new_coord;
+            corner_orientantion_symmetries[new_coord][sym] = coord;
+        }
+    }
+    
+    // Saving the table into a file
+    FILE *f;
+    int error;
+    
+    error = fopen_s(&f, file_name, "wb");
+    fwrite(corners_order_base, sizeof(char), NUM_CORNERS, f);
+    fwrite(corner_orientantion_symmetries, sizeof(int), CORNER_ORI_N*SYMMETRIES_N, f);
+    
+    printf_s("\n");
+    fclose(f);
+}
+
+void setup_edge_orientantion_symmetries(){
+    char file_name[] = "tables\\3x3x3\\symmetries.edge_o";
+    
+    if(check_file_validity_and_read((int *)edge_orientantion_symmetries,
+            UDSLICE_EQUI_N*EDGE_ORI_N*SYMMETRIES_N, sizeof(int),
+            file_name, edges_order_base, NUM_EDGES) == 0){
+        // File exists and it's ok
+        // File has been already read
+        printf_s("\n");
+        return;
+    }
+    
+    // File doesn't exist or it has wrong piece order.
+    // The table must be computed here.
+    cube3_t cube3 = create_cube3();
+    cube3_t new_cube3;
+    int edge_o, sym_c, sym_s, raw;
+    int new_coord;
+    
+    for(sym_c=0; sym_c<UDSLICE_EQUI_N; sym_c++){
+        for(int i=0; i<NUM_EDGES; i++){
+            cube3.edges[i].piece = UR;
+        }
+        
+        raw = ud_slice_sorted_sym_to_raw_table[sym_c][0];
+        get_inverse_coord_4_edges_permutation(&cube3, raw, 0);
+        
+        for(edge_o=0; edge_o<EDGE_ORI_N; edge_o++){
+            get_inverse_edge_orientation(&cube3, edge_o);
+            
+            if(sym_c == 228 && edge_o == 0){
+                printf_s("\n--%i--%i--\n\n", sym_c, edge_o);
+            }
+            
+            if(sym_c == 228 && edge_o == 550){
+                printf_s("\n--%i--%i--\n\n", sym_c, edge_o);
+            }
+            
+            if(sym_c == 228 && edge_o == 1092){
+                printf_s("\n--%i--%i--\n\n", sym_c, edge_o);
+            }
+            
+            if(sym_c == 645 && edge_o == 550){
+                printf_s("\n--%i--%i--\n\n", sym_c, edge_o);
+            }
+            
+            if(sym_c == 645 && edge_o == 1570){
+                printf_s("\n--%i--%i--\n\n", sym_c, edge_o);
+            }
+            
+            for(sym_s=SYMMETRIES_N-1; sym_s>=0; sym_s--){
+                //new_cube3 = multiply_cube3(symmetries_table[sym_s], cube3);
+                //new_cube3 = multiply_cube3(new_cube3, symmetries_inverse_table[sym_s]);
+                new_cube3 = multiply_cube3(symmetries_inverse_table[sym_s], cube3);
+                new_cube3 = multiply_cube3(new_cube3, symmetries_table[sym_s]);
+                
+                new_coord = get_coord_edge_orientation(new_cube3);
+                
+                //edge_orientantion_symmetries[sym_c][edge_o][sym_s] = new_coord;
+                edge_orientantion_symmetries[sym_c][new_coord][sym_s] = edge_o;
+            }
+        }
+    }
+    
+    // Saving the table into a file
+    FILE *f;
+    int error;
+    
+    error = fopen_s(&f, file_name, "wb");
+    fwrite(edges_order_base, sizeof(char), NUM_EDGES, f);
+    fwrite(edge_orientantion_symmetries, sizeof(int),
+            UDSLICE_EQUI_N*EDGE_ORI_N*SYMMETRIES_N, f);
+    
+    printf_s("\n");
+    fclose(f);
+}
 
 
+int setup_pruning_tables_3x3x3(){
+    int error = 0, huge_type;
+    long long int huge_dim;
+    long long int i=0, j=0;
+    
+    
+    
+    char file_name[128] = "tables\\3x3x3\\pruning.huge_";
+    huge_type = 3;
+    
+    switch (huge_type){
+    case 1:
+        // No sym-coordinates, each byte represents a single value
+        huge_dim = (long long int)UDSLICE_N * CORNER_ORI_N * EDGE_ORI_N;
+        strcat(file_name, "1");
+        break;
+    case 2:
+        // No sym-coordinates, each byte is divided in 4 parts
+        huge_dim = (long long int)UDSLICE_N * CORNER_ORI_N * EDGE_ORI_N / 4;
+        strcat(file_name, "2");
+        break;
+    default:
+    case 3:
+        // Sym-coordinates for UD-Slice, each byte represents a single value
+        huge_dim = (long long int)UDSLICE_EQUI_N * CORNER_ORI_N * EDGE_ORI_N;
+        strcat(file_name, "3");
+        break;
+    }
+    
+    if(huge_type != 3){
+        printf_s("Type %i for the huge table is still not supported :(\n", huge_type);
+        return -2;
+    }
+    
+    
+    prune_tbs.main_index = malloc(
+        sizeof(char) * (huge_dim)
+    );
+    
+    if(prune_tbs.main_index == NULL){
+        printf_s("Failed to allocate %lli bytes for the huge prune table allocated.\n",
+                huge_dim);
+        return -1;
+    }
+    prune_tbs.huge = prune_tbs.main_index;
+    prune_tbs.huge_dim = huge_dim;
+    
+    printf_s("Huge prune table allocated (%lli bytes).\n", huge_dim);
+    
+    
+    if(check_file_validity_and_read(prune_tbs.huge, huge_dim, sizeof(char), file_name,
+            pieces_order_base, NUM_CORNERS + NUM_EDGES) == 0){
+        // File exists and it's ok
+        // File has been already read
+        printf_s("\n");
+        return -1;
+    }
+    
+    // File doesn't exist or it has wrong piece order.
+    // The table must be computed here.
+    char current_num_moves, next_num_moves;
+    long long int num_computed_total, num_computed_loop, num_visited_total, num_visited_loop;
+    long long int ud_slice, udsl_sym_c, udsl_sym_s, cor_o, edge_o;
+    long long int new_ud_slice, new_udsl_sym_c, new_udsl_sym_s, new_cor_o, new_edge_o;
+    long long int mid_cor_o, mid_edge_o;
+    //int symmetry;
+    
+    cube3_t cube3 = create_cube3();
+    fast_move_t fast_m;
+    long long int prune_values_distribution[GOD_N_3X3+1];
+    for(i=0; i<GOD_N_3X3+1; i++){
+        prune_values_distribution[i] = 0;
+    }
+    //prune_values_distribution[0] = 1;
+    
+    printf_s("Initializing the table memory.\n");
+    for(i=1; i<huge_dim; i++){
+        //prune_tbs.huge[i] = 0xAA; // 0xAA = 1010 1010
+        prune_tbs.huge[i] = -1;
+    }
+    prune_tbs.huge[0] = 0;
+    
+    current_num_moves = 0;
+    next_num_moves = 1;
+    num_computed_total = 0;
+    num_visited_total = 0;
+    do{
+        num_computed_loop = 0;
+        num_visited_loop = 0;
+        printf_s("Current number of moves: %2i --- ", current_num_moves);
+        
+        for(i=0; i<huge_dim; i++){
+            if(prune_tbs.huge[i] != current_num_moves){
+                continue;
+            }
+            num_visited_loop++;
+            num_visited_total++;
+            
+            edge_o = i % EDGE_ORI_N;
+            cor_o = (i / EDGE_ORI_N) % CORNER_ORI_N;
+            udsl_sym_c = i / (EDGE_ORI_N * CORNER_ORI_N);
+            //udsl_sym_s = 0;
+            
+            ud_slice = ud_slice_sorted_sym_to_raw_table[udsl_sym_c][0];
+            
+            //if(udsl_sym_c == 228 && cor_o == 1236 && edge_o == 550){
+            //    printf_s("");
+            //}
+            
+            
+            //if(udsl_sym_c == 188 && cor_o == 1953 && edge_o == 534){
+            //    printf_s("");
+            //}
+            
+            //if(udsl_sym_c == 777 && cor_o == 1268 && edge_o == 687){
+            //    printf_s("");
+            //}
+            
+            
+            
+            for(fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
+                new_ud_slice = move_tbs.ud_slice[ud_slice*NUM_MOVES + fast_m];
+                mid_cor_o = move_tbs.cor_o[cor_o*NUM_MOVES + fast_m];
+                mid_edge_o = move_tbs.edge_o[edge_o*NUM_MOVES + fast_m];
+                
+                new_udsl_sym_c = ud_slice_sorted_raw_to_sym_table[new_ud_slice][0];
+                //new_udsl_sym_s = ud_slice_sorted_raw_to_sym_table[new_ud_slice][1];
+                
+                for(new_udsl_sym_s=0; new_udsl_sym_s<SYMMETRIES_N; new_udsl_sym_s++){
+                    if(ud_slice_sorted_sym_to_raw_table[new_udsl_sym_c][new_udsl_sym_s] != new_ud_slice){
+                        continue;
+                    }
+                    
+                    new_cor_o = corner_orientantion_symmetries[mid_cor_o][new_udsl_sym_s];
+                    new_edge_o = edge_orientantion_symmetries[new_udsl_sym_c][mid_edge_o][new_udsl_sym_s];
+                    
+                    // huge[UDSLICE_EQUI_N][CORNER_ORI_N][EDGE_ORI_N]
+                    j = (new_udsl_sym_c * CORNER_ORI_N + new_cor_o) * EDGE_ORI_N + new_edge_o;
+                    
+                    if(prune_tbs.huge[j] < 0){
+                        prune_tbs.huge[j] = next_num_moves;
+                        num_computed_total++;
+                        num_computed_loop++;
+                    }
+                }
+                
+            }
+        }
+        
+        //prune_values_distribution[next_num_moves] = num_computed_loop;
+        printf_s("%10lli / %10lli\n", num_visited_loop, num_visited_total);
+        
+        current_num_moves++;
+        next_num_moves++;
+    //} while(num_computed_loop);
+    } while(num_computed_total < huge_dim && num_computed_loop);
+    
+    
+    long long int empty_slots = 0;
+    for(i=0; i<huge_dim; i++){
+        if(prune_tbs.huge[i] >= 0){
+            prune_values_distribution[prune_tbs.huge[i]] += 1;
+        }
+        else{
+            empty_slots++;
+        }
+    }
+    
+    printf_s("\nDistribution of the Pruning Values in the Pruning Tables:\n");
+    for(i=0; i<GOD_N_3X3+1; i++){
+        printf_s("%2i -- %10lli\n", i, prune_values_distribution[i]);
+    }
+    printf_s("\n");
+    printf_s("Empty slots: %lli\n", empty_slots);
+    printf_s("Number of computed values: %lli\n", num_computed_total);
+    printf_s("Huge dim: %lli\n", huge_dim);
+    
+    
+    // Saving the table into a file
+    FILE *f;
+    //int error;
+    
+    error = fopen_s(&f, file_name, "wb");
+    fwrite(pieces_order_base, sizeof(char), NUM_CORNERS + NUM_EDGES, f);
+    fwrite(prune_tbs.huge, sizeof(char),
+            (long long int)UDSLICE_EQUI_N*CORNER_ORI_N*EDGE_ORI_N, f);
+            
+    printf_s("\n");
+    fclose(f);
+    
+    printf_s("Number of errors while allocating the pruning tables: %i\n\n", error);
+    return 0;
+}
 
+char get_pruning_huge_value(coord_cube_t coords){
+    long long int i;
+    long long int udsl_sym_c, udsl_sym_s, cor_o, edge_o;
+    
+    udsl_sym_c = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][0];
+    udsl_sym_s = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][1];
+    
+    cor_o = corner_orientantion_symmetries[coords.cor_o][udsl_sym_s];
+    edge_o = edge_orientantion_symmetries[udsl_sym_c][coords.edge_o][udsl_sym_s];
+    
+    if(prune_tbs.huge == NULL){
+        return -1;
+    }
+    
+    i = (udsl_sym_c * CORNER_ORI_N + cor_o) * EDGE_ORI_N + edge_o;
+    return prune_tbs.huge[i];
+}
+
+
+/*
+
+    for(new_udsl_sym_s=0; new_udsl_sym_s<SYMMETRIES_N; new_udsl_sym_s++){
+        if(ud_slice_sorted_sym_to_raw_table[new_udsl_sym_c][new_udsl_sym_s] != new_ud_slice){
+            continue;
+        }
+        
+        new_cor_o = corner_orientantion_symmetries[mid_cor_o][new_udsl_sym_s];
+        new_edge_o = edge_orientantion_symmetries[new_udsl_sym_c][mid_edge_o][new_udsl_sym_s];
+        
+        // huge[UDSLICE_EQUI_N][CORNER_ORI_N][EDGE_ORI_N]
+        j = (new_udsl_sym_c * CORNER_ORI_N + new_cor_o) * EDGE_ORI_N + new_edge_o;
+        
+        if(prune_tbs.huge[j] < 0){
+            prune_tbs.huge[j] = next_num_moves;
+            num_computed_total++;
+            num_computed_loop++;
+        }
+    }
+*/
 
 
 

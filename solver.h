@@ -144,9 +144,14 @@ int solve_3x3x3_recursion(coord_cube_t coord_cube, fast_move_t *fast_ms, face_t 
         return is_coord_cube_solved(coord_cube);
     }
     
-    // Pruning --- TO-DO
+    /* 
+    // Pruning
+    int prune_value = get_pruning_huge_value(coord_cube);
     
-    
+    if(prune_value > max_depth - current_depth){
+        return 0;
+    }
+     */
     
     // Recursion
     coord_cube_t new_coords;
@@ -165,7 +170,11 @@ int solve_3x3x3_recursion(coord_cube_t coord_cube, fast_move_t *fast_ms, face_t 
         fast_ms[current_depth] = fast_m;
         
         new_coords = apply_fast_move_to_coord_cube(coord_cube, fast_m);
-        solution_found = solve_3x3x3_recursion(new_coords, fast_ms, face, max_depth, current_depth+1);
+        
+        // Pruning
+        if(get_pruning_huge_value(new_coords) + 1 <= max_depth - current_depth){
+            solution_found = solve_3x3x3_recursion(new_coords, fast_ms, face, max_depth, current_depth+1);
+        }
     }
     
     return solution_found;

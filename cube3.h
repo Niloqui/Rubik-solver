@@ -83,6 +83,7 @@ face_t edge_face_table[][2] = {
     [FL] = {F,L},
     [BL] = {B,L},
     [BR] = {B,R},
+    [EDGE_LAST] = {exchange,exchange},
 };
 
 face_t corners_face_table[][3] = {
@@ -94,6 +95,7 @@ face_t corners_face_table[][3] = {
     [DFL] = {D,L,F},
     [DBR] = {D,R,B},
     [DBL] = {D,B,L},
+    [CORNER_LAST] = {exchange,exchange,exchange},
 };
 
 void restore_cube3(cube3_t *cube3_p){
@@ -375,7 +377,7 @@ char* get_one_line_str_from_cube3(const cube3_t cube, int use_num_flag){
     }
     
     pos -= 2;
-    pos += sprintf_s(str+pos, 1024-pos, " --- ");
+    pos += sprintf_s(str+pos, 1024-pos, " -%c- ", cube.reflection?'R':'-');
     
     for(edges_e i=0; i<EDGE_LAST; i++){
         if(use_num_flag){
@@ -525,7 +527,7 @@ cube3_t apply_inverse_seq_to_cube3(cube3_t cube3, const moves_seq_t seq){
     return cube3;
 }
 
-int cube3_equals_cube3(const cube3_t A, const cube3_t B){ // True if the two cubes are the same
+int cube3_equals_cube3(const cube3_t A, const cube3_t B){ // 1 if the two cubes are the same
     if(A.reflection != B.reflection){
         return 0;
     }
@@ -656,122 +658,6 @@ const cube3_t symmetries_base[3] = {
     },
 };
 
-const fast_move_t symmetries_fast_m_base[3][LAST_FAST_MOVE] = {
-    { // S_U4
-        [move_R] = move_F,
-        [move_R2] = move_F2,
-        [move_Rp] = move_Fp,
-        [move_U] = move_U,
-        [move_U2] = move_U2,
-        [move_Up] = move_Up,
-        [move_F] = move_L,
-        [move_F2] = move_L2,
-        [move_Fp] = move_Lp,
-        [move_L] = move_B,
-        [move_L2] = move_B2,
-        [move_Lp] = move_Bp,
-        [move_D] = move_D,
-        [move_D2] = move_D2,
-        [move_Dp] = move_Dp,
-        [move_B] = move_R,
-        [move_B2] = move_R2,
-        [move_Bp] = move_Rp
-    },
-    { // S_F2
-        [move_R] = move_L,
-        [move_R2] = move_L2,
-        [move_Rp] = move_Lp,
-        [move_U] = move_D,
-        [move_U2] = move_D2,
-        [move_Up] = move_Dp,
-        [move_F] = move_F,
-        [move_F2] = move_F2,
-        [move_Fp] = move_Fp,
-        [move_L] = move_R,
-        [move_L2] = move_R2,
-        [move_Lp] = move_Rp,
-        [move_D] = move_U,
-        [move_D2] = move_U2,
-        [move_Dp] = move_Up,
-        [move_B] = move_B,
-        [move_B2] = move_B2,
-        [move_Bp] = move_Bp
-    },
-    { // S_LR2
-        [move_R] = move_Lp,
-        [move_R2] = move_L2,
-        [move_Rp] = move_L,
-        [move_U] = move_Up,
-        [move_U2] = move_U2,
-        [move_Up] = move_U,
-        [move_F] = move_Fp,
-        [move_F2] = move_F2,
-        [move_Fp] = move_F,
-        [move_L] = move_Rp,
-        [move_L2] = move_R2,
-        [move_Lp] = move_R,
-        [move_D] = move_Dp,
-        [move_D2] = move_D2,
-        [move_Dp] = move_D,
-        [move_B] = move_Bp,
-        [move_B2] = move_B2,
-        [move_Bp] = move_B
-    }
-};
-/*
-const face_t remapping_move_symmetries_table[][7] = {
-    { // S_U4 (y)
-        /* R  * / F,
-        /* U  * / U,
-        /* F  * / L,
-        /* ex * / exchange,
-        /* L  * / B,
-        /* D  * / D,
-        /* B  * / R,
-    },
-    { // S_F2 (z2)
-        /* R  * / L,
-        /* U  * / D,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
-        /* F  * / F,
-        /* ex * / exchange,
-        /* L  * / R,
-        /* D  * / U,
-        /* B  * / B,
-    },
-    { // S_LR2 (Reflection)
-        /* R  * / L,
-        /* U  * / U,
-        /* F  * / F,
-        /* ex * / exchange,
-        /* L  * / R,
-        /* D  * / D,
-        /* B  * / B,
-    },
-};
-
-void remap_face_on_cube_no_centers(cube_t cube, int sym_idx){
-    // This function assumes the cube is a 3x3
-    for(int i=0; i<(NUM_FACES+1); i++){
-        if(i == exchange){
-            continue;
-        }
-        
-        for(int j=0; j<9; j++){ // j<cube.num_stickers_face
-            if(j == 4){
-                continue;
-            }
-            
-            cube.faces[i*9 + j] = 
-                    remapping_move_symmetries_table[sym_idx][cube.faces[i*9 + j]];
-        }
-    }
-    
-    return;
-}
-
-*/
-
-
 cube3_t multiply_cube3(const cube3_t A, const cube3_t B){
     //cube3_t sym = symmetries_base[sym_idx];
     cube3_t result;
@@ -786,7 +672,7 @@ cube3_t multiply_cube3(const cube3_t A, const cube3_t B){
     
     for(corners_e i=0; i<NUM_CORNERS; i++){
         result.corners[i].orientation = (B.corners[i].orientation + 
-            A.corners[B.corners[i].piece].orientation) % 3;
+                A.corners[B.corners[i].piece].orientation) % 3;
         
         result.corners[i].piece = A.corners[B.corners[i].piece].piece;
         
@@ -803,33 +689,8 @@ cube3_t multiply_cube3(const cube3_t A, const cube3_t B){
     return result;
 }
 
-void remap_fast_moves(fast_move_t *array, const fast_move_t *remap){
-    /* 
-    fast_move_t temp[LAST_FAST_MOVE] = {
-        LAST_FAST_MOVE, LAST_FAST_MOVE, LAST_FAST_MOVE,
-        LAST_FAST_MOVE, LAST_FAST_MOVE, LAST_FAST_MOVE,
-        LAST_FAST_MOVE, LAST_FAST_MOVE, LAST_FAST_MOVE,
-        LAST_FAST_MOVE, LAST_FAST_MOVE, LAST_FAST_MOVE,
-        LAST_FAST_MOVE, LAST_FAST_MOVE, LAST_FAST_MOVE,
-        LAST_FAST_MOVE, LAST_FAST_MOVE, LAST_FAST_MOVE,
-    };
-     */
-    fast_move_t temp[LAST_FAST_MOVE];
-    
-    for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
-        temp[fast_m] = remap[array[fast_m]];
-    }
-    
-    for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
-        array[fast_m] = temp[fast_m];
-    }
-}
-
-
 cube3_t symmetries_table[SYMMETRIES_N];
 cube3_t symmetries_inverse_table[SYMMETRIES_N];
-fast_move_t symmetries_fast_m_table[SYMMETRIES_N][LAST_FAST_MOVE];
-fast_move_t symmetries_inv_fast_m_table[SYMMETRIES_N][LAST_FAST_MOVE];
 
 void setup_symmetries_table(){
     cube3_t cube3 = create_cube3();
@@ -844,24 +705,31 @@ void setup_symmetries_table(){
             for(int k=0; k<2; k++){
                 symmetries_table[i*4 + j*2 + k] = cube3;
                 
-                for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
-                    symmetries_fast_m_table[i*4 + j*2 + k][fast_m] = fast_table[fast_m];
-                }
-                
                 cube3 = multiply_cube3(cube3, symmetries_base[2]);
-                remap_fast_moves(fast_table, symmetries_fast_m_base[2]);
             }
-            
             cube3 = multiply_cube3(cube3, symmetries_base[1]);
-            remap_fast_moves(fast_table, symmetries_fast_m_base[1]);
         }
-        
         cube3 = multiply_cube3(cube3, symmetries_base[0]);
-        remap_fast_moves(fast_table, symmetries_fast_m_base[0]);
     }
 }
 
 void setup_symmetries_inverse_table(){
+    cube3_t temp_cube3;
+    int i, j;
+    
+    cube3_t base_cube3 = create_cube3();
+    
+    for(i=0; i<SYMMETRIES_N; i++){
+        for(j=0; j<SYMMETRIES_N; j++){
+            temp_cube3 = multiply_cube3(symmetries_table[i], symmetries_table[j]);
+            
+            if(cube3_equals_cube3(base_cube3, temp_cube3)){
+                symmetries_inverse_table[i] = symmetries_table[j];
+            }
+        }
+    }
+    
+    /* 
     cube3_t cube3 = create_cube3();
     
     fast_move_t fast_table[LAST_FAST_MOVE];
@@ -874,28 +742,20 @@ void setup_symmetries_inverse_table(){
             for(int i=0; i<4; i++){
                 symmetries_inverse_table[i*4 + j*2 + k] = cube3;
                 
-                for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE; fast_m++){
-                    symmetries_inv_fast_m_table[i*4 + j*2 + k][fast_m] = fast_table[fast_m];
-                }
-                
                 // Bad hack
                 cube3 = multiply_cube3(cube3, symmetries_base[0]);
                 cube3 = multiply_cube3(cube3, symmetries_base[0]);
                 cube3 = multiply_cube3(cube3, symmetries_base[0]);
-                remap_fast_moves(fast_table, symmetries_fast_m_base[0]);
-                remap_fast_moves(fast_table, symmetries_fast_m_base[0]);
-                remap_fast_moves(fast_table, symmetries_fast_m_base[0]);
             }
-            
             cube3 = multiply_cube3(cube3, symmetries_base[1]);
-            remap_fast_moves(fast_table, symmetries_fast_m_base[1]);
         }
-        
         cube3 = multiply_cube3(cube3, symmetries_base[2]);
-        remap_fast_moves(fast_table, symmetries_fast_m_base[2]);
     }
+     */
+    
 }
 
+/* 
 int sym_sym_table[SYMMETRIES_N][SYMMETRIES_N];
 int sym_sym_inverse_table[SYMMETRIES_N][SYMMETRIES_N];
 
@@ -934,13 +794,14 @@ void setup_sym_sym_inverse_table(){
 }
 
 
+*/
 
 void setup_all_symmetries_table(){
     setup_symmetries_table();
     setup_symmetries_inverse_table();
     
-    setup_sym_sym_table();
-    setup_sym_sym_inverse_table();
+    //setup_sym_sym_table();
+    //setup_sym_sym_inverse_table();
 }
 
 
