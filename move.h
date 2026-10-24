@@ -3,6 +3,7 @@
 #include "face.h"
 
 #define NUM_MOVES (3*NUM_FACES) // 18
+#define DOUBLE_FAST_N (18*18 - 9*9) // 243
 
 typedef union {
     // With "unsigned int" the total space is 8 bytes for one move.
@@ -392,6 +393,76 @@ move_t fast_to_move_table[] = {
 fast_move_t get_fast_from_move(move_t move){
     return move.face*3 + move.rotation-1 -(move.face>exchange?3:0);
 }
+
+
+/* This struct is able to contain 3 moves in 2 bytes.
+ * It can also encode a missing move
+*/
+typedef struct {
+    fast_move_t move1 : 5;
+    
+    // I'm using unnsigned char because I was getting warnings
+    // warning: 'move2_hi' is narrower than values of its type
+    // warning: 'move2_lo' is narrower than values of its type
+    // TO-DO: find a way to suppress this warning
+    //fast_move_t move2_hi : 3;
+    //fast_move_t move2_lo : 2;
+    unsigned char move2_hi : 3;
+    unsigned char move2_lo : 2;
+    
+    fast_move_t move3 : 5;
+} triplet_fast_t;
+
+
+#define double_fast_t unsigned char
+
+/* This table is able to contain 2 moves in 1 byte.
+ * It CANNOT encode a missing move
+*/
+fast_move_t double_fast_to_fast[DOUBLE_FAST_N][2];
+double_fast_t fast_to_double_fast[NUM_MOVES][NUM_MOVES];
+
+void setup_double_fast_tables(){
+    fast_move_t move1, move2;
+    face_t face1, face2;
+    int axis1, axis2;
+    
+    int idx=0;
+    for(move1=move_R; move1<LAST_FAST_MOVE; move1++){
+        face1 = fast_to_move_table[move1].face;
+        axis1 = get_axis_from_face(face1);
+        
+        for(move2=move_R; move2<LAST_FAST_MOVE; move2++){
+            face2 = fast_to_move_table[move2].face;
+            axis2 = get_axis_from_face(face2);
+            
+            // "face2 < exchange" means that the face is R, U or F
+            if((face1 == face2) || (axis1 == axis2 && face2 < exchange)){
+                fast_to_double_fast[move1][move2] = -1;
+            }
+            else{
+                fast_to_double_fast[move1][move2] = idx;
+                
+                double_fast_to_fast[idx][0] = move1;
+                double_fast_to_fast[idx][1] = move2;
+                
+                idx++;
+            }
+        }
+    }
+    
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 

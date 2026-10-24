@@ -138,6 +138,8 @@ solution_t solve_2x2x2(cube_t cube){
     return sol;
 }
 
+
+
 int solve_3x3x3_recursion(coord_cube_t coord_cube, fast_move_t *fast_ms, face_t last_face, int max_depth, int current_depth){
     // End of recursion
     if(current_depth == max_depth){
@@ -156,9 +158,11 @@ int solve_3x3x3_recursion(coord_cube_t coord_cube, fast_move_t *fast_ms, face_t 
     // Recursion
     coord_cube_t new_coords;
     int solution_found = 0;
+    int next_depth = current_depth + 1;
     int last_axis = get_axis_from_face(last_face);
+    fast_move_t fast_m;
     
-    for(fast_move_t fast_m=0; fast_m<LAST_FAST_MOVE && !solution_found; fast_m++){
+    for(fast_m=0; fast_m<LAST_FAST_MOVE && !solution_found; fast_m++){
         face_t face = fast_to_move_table[fast_m].face;
         int axis = get_axis_from_face(face);
         
@@ -167,22 +171,24 @@ int solve_3x3x3_recursion(coord_cube_t coord_cube, fast_move_t *fast_ms, face_t 
             continue;
         }
         
-        fast_ms[current_depth] = fast_m;
+        //fast_ms[current_depth] = fast_m;
         
         new_coords = apply_fast_move_to_coord_cube(coord_cube, fast_m);
         
+        // End of recursion
+        //if(next_depth == max_depth && is_coord_cube_solved(new_coords)){
+        //    solution_found = 1;
+        //} else
         // Pruning
-        if(get_pruning_huge_value(new_coords) + 1 <= max_depth - current_depth){
-            solution_found = solve_3x3x3_recursion(new_coords, fast_ms, face, max_depth, current_depth+1);
+        if(get_pruning_huge_value(new_coords) <= max_depth - next_depth){
+            solution_found = solve_3x3x3_recursion(new_coords, fast_ms, face, max_depth, next_depth);
         }
     }
     
+    fast_ms[current_depth] = fast_m-1;
+    
     return solution_found;
 }
-
-
-
-
 
 solution_t solve_3x3x3(cube_t cube){
     // This function assumes that cube.num_layers == 3

@@ -30,6 +30,14 @@
 //#define SOLVER_SYMMETRIES_N 4*2*2               // 16
 //#define SYMMETRIES_N 3*SOLVER_SYMMETRIES_N      // 48    // Defined in cube3.h (another value)
 
+#define STATES_06_N 8240087
+#define STATES_7_N 100803036
+#define STATES_8_N 1332343288
+
+// How much the hash table will be oversized with respect to the values that will be
+// inserted
+#define HASH_TABLE_FACTOR 10
+
 
 ////////////////// DON'T CHANGE THESE
 ////////////////// DON'T CHANGE THESE
@@ -1240,44 +1248,218 @@ int setup_pruning_tables_3x3x3(){
 }
 
 char get_pruning_huge_value(coord_cube_t coords){
-    long long int i;
-    long long int udsl_sym_c, udsl_sym_s, cor_o, edge_o;
+    // This function assumes that prune_tbs.huge is not NULL and has been initialised
     
-    udsl_sym_c = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][0];
-    udsl_sym_s = ud_slice_sorted_raw_to_sym_table[coords.ud_slice][1];
+    long long int cor_o, edge_o;
     
-    cor_o = corner_orientantion_symmetries[coords.cor_o][udsl_sym_s];
-    edge_o = edge_orientantion_symmetries[udsl_sym_c][coords.edge_o][udsl_sym_s];
+    cor_o = corner_orientantion_symmetries[coords.cor_o][coords.ud_sym_s];
+    edge_o = edge_orientantion_symmetries[coords.ud_sym_c][coords.edge_o][coords.ud_sym_s];
     
-    if(prune_tbs.huge == NULL){
-        return -1;
-    }
-    
-    i = (udsl_sym_c * CORNER_ORI_N + cor_o) * EDGE_ORI_N + edge_o;
-    return prune_tbs.huge[i];
+    return prune_tbs.huge[
+        coords.ud_sym_c * (long long int)(CORNER_ORI_N * EDGE_ORI_N) +
+        cor_o * EDGE_ORI_N +
+        edge_o
+    ];
 }
 
 
-/*
 
-    for(new_udsl_sym_s=0; new_udsl_sym_s<SYMMETRIES_N; new_udsl_sym_s++){
-        if(ud_slice_sorted_sym_to_raw_table[new_udsl_sym_c][new_udsl_sym_s] != new_ud_slice){
-            continue;
-        }
+
+////////////////////////////////////////////////////////////////////////////
+/////////////////////////////// States Tables //////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+/* This data structure is only needed for table indexing,
+ * so no movement function will be implemented
+*/
+typedef struct {
+    // Edge coordinate
+    // edge_p * EDGE_ORI_N + edge_o
+    long long unsigned int edge_coord;
+    
+    // Corner coordinate
+    // cor_p * CORNER_ORI_N + cor_o
+    unsigned int cor_coord;
+} compact_coord_t;
+
+compact_coord_t create_compact_coord(){
+    compact_coord_t comp_coord;
+    
+    comp_coord.cor_coord = 0;
+    comp_coord.edge_coord = 0;
+    
+    return comp_coord;
+}
+
+compact_coord_t get_compact_coord_from_cube3(cube3_t cube3){
+    compact_coord_t comp_coord;
+    
+    unsigned int cor_o; // Corner orientation
+    unsigned int cor_p; // Corner permutation
+    long long unsigned int edge_o; // Edge orientation
+    long long unsigned int edge_p; // Edge permutation
+    
+    cor_o = get_coord_corner_orientation(cube3);
+    cor_p = get_coord_corner_permutation(cube3);
+    comp_coord.cor_coord = cor_p * CORNER_ORI_N + cor_o;
+    
+    edge_o = get_coord_edge_orientation(cube3);
+    edge_p = get_coord_edge_permutation(cube3);
+    comp_coord.edge_coord = edge_p * EDGE_ORI_N + edge_o;
+    
+    return comp_coord;
+}
+
+typedef struct {
+    compact_coord_t comp_coord;
+    triplet_fast_t moves[2];
+} states_table_entry_t;
+
+
+typedef struct {
+    void *main_index;
+    
+    // From 0 moves (solved state) to 6 moves states
+    states_table_entry_t *states_06; // states_06[STATES_06_N]
+    
+    // 7 moves states
+    double_fast_t *states_7; //states_7[STATES_7_N]
+    
+    // 8 moves states
+    //double_fast_t *states_8; //states_8[STATES_8_N]
+    
+} states_table_t;
+
+states_table_t states_tbs;
+
+int setup_states_06_recursion(){
+    
+    
+    
+    
+    return -666;
+}
+
+
+
+int setup_states_06_tables(){
+    char file_name[] = "tables\\3x3x3\\states.s_06";
+    
+    if(check_file_validity_and_read(states_tbs.states_06,
+            STATES_06_N, sizeof(states_table_entry_t), file_name,
+            pieces_order_base, NUM_CORNERS + NUM_EDGES) == 0){
+        // File exists and it's ok
+        // File has been already read
+        printf_s("\n");
+        return -1;
+    }
+    
+    // File doesn't exist or it has wrong piece order.
+    // The table must be computed here.
+    
+    cube3_t cube3 = create_cube3();
+    compact_coord_t comp_coords = create_compact_coord();
+    
+    
+    //coord_cube_t coords = create_coord_cube();
+    //cube3_t new_cube3;
+    //int coord, sym;
+    //int new_coord;
+    
+    
+    /* 
+    for(coord=0; coord<CORNER_ORI_N; coord++){
+        get_inverse_corner_orientation(&cube3, coord);
         
-        new_cor_o = corner_orientantion_symmetries[mid_cor_o][new_udsl_sym_s];
-        new_edge_o = edge_orientantion_symmetries[new_udsl_sym_c][mid_edge_o][new_udsl_sym_s];
-        
-        // huge[UDSLICE_EQUI_N][CORNER_ORI_N][EDGE_ORI_N]
-        j = (new_udsl_sym_c * CORNER_ORI_N + new_cor_o) * EDGE_ORI_N + new_edge_o;
-        
-        if(prune_tbs.huge[j] < 0){
-            prune_tbs.huge[j] = next_num_moves;
-            num_computed_total++;
-            num_computed_loop++;
+        for(sym=0; sym<SYMMETRIES_N; sym++){
+            //new_cube3 = multiply_cube3(symmetries_table[sym], cube3);
+            //new_cube3 = multiply_cube3(new_cube3, symmetries_inverse_table[sym]);
+            new_cube3 = multiply_cube3(symmetries_inverse_table[sym], cube3);
+            new_cube3 = multiply_cube3(new_cube3, symmetries_table[sym]);
+            
+            new_coord = get_coord_corner_orientation(new_cube3);
+            
+            //corner_orientantion_symmetries[coord][sym] = new_coord;
+            corner_orientantion_symmetries[new_coord][sym] = coord;
         }
     }
-*/
+    
+    // Saving the table into a file
+    FILE *f;
+    int error;
+    
+    error = fopen_s(&f, file_name, "wb");
+    fwrite(corners_order_base, sizeof(char), NUM_CORNERS, f);
+    fwrite(corner_orientantion_symmetries, sizeof(int), CORNER_ORI_N*SYMMETRIES_N, f);
+    
+    printf_s("\n");
+    fclose(f);
+    
+     */
+
+    return 0;
+}
+
+int setup_states_7_tables(){
+    char states_7_filename[] = "tables\\3x3x3\\states.s_7";
+    
+    
+    
+    
+    
+    
+    return 0;
+}
+
+
+
+
+
+int setup_states_tables_3x3x3(){
+    
+    /* 
+    // From 0 moves (solved state) to 6 moves states
+    states_table_entry_t *states_06; // states_06[STATES_06_N]
+    
+    // 7 moves states
+    double_fast_t *states_7; //states_7[STATES_7_N][4]
+    
+    // 8 moves states
+    //double_fast_t *states_8; //states_8[STATES_8_N][4]
+     */
+    
+    states_tbs.main_index = malloc(
+        sizeof(states_table_entry_t) * STATES_06_N + 
+        sizeof(double_fast_t) * STATES_7_N * 4
+    );
+    
+    if(prune_tbs.main_index == NULL){
+        printf_s("Failed to allocate memory for the states tables.\n");
+        return -1;
+    }
+    printf_s("States tables allocated.\n");
+    
+    states_tbs.states_06 = states_tbs.main_index;
+    states_tbs.states_7 = states_tbs.states_06 + sizeof(states_table_entry_t)*STATES_06_N;
+    
+    
+    // From 0 moves (solved state) to 6 moves states
+    setup_states_06_tables();
+    
+    // 7 moves states
+    setup_states_7_tables();
+    
+    // 8 moves states
+    // Not implemented
+    
+    return 0;
+}
+
+
+
+
+
+
 
 
 
